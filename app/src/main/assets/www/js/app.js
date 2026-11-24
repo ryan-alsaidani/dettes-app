@@ -1,45 +1,38 @@
-// المرحلة 0: اختبارات سريعة فقط. ستُستبدل بالتطبيق الفعلي في المرحلة 1.
+import { openDB } from './db.js';
+import { h } from './ui/dom.js';
+import { renderHome } from './ui/home.js';
+import { renderCustomer } from './ui/customer.js';
+import { renderProducts } from './ui/product.js';
+import { renderSettings } from './ui/settings.js';
 
-function mark(id, ok, text) {
-  const el = document.getElementById(id);
-  el.textContent = text;
-  el.classList.add(ok ? 'ok' : 'bad');
+const view = document.getElementById('view');
+const nav = document.getElementById('nav');
+
+function route() {
+  const hash = location.hash || '#/';
+  const m = hash.match(/^#\/customer\/(\d+)$/);
+  let active = 'home';
+  nav.hidden = false;
+  window.scrollTo(0, 0);
+
+  if (m) {
+    nav.hidden = true;
+    return renderCustomer(view, Number(m[1]));
+  }
+  if (hash === '#/products') { active = 'products'; renderProducts(view); }
+  else if (hash === '#/settings') { active = 'settings'; renderSettings(view); }
+  else renderHome(view);
+
+  nav.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.tab === active));
 }
 
-function testIndexedDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('dettes-phase0', 1);
-    req.onupgradeneeded = () => req.result.createObjectStore('t');
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      const db = req.result;
-      const tx = db.transaction('t', 'readwrite');
-      tx.objectStore('t').put('ok', 'k');
-      tx.oncomplete = () => {
-        const get = db.transaction('t').objectStore('t').get('k');
-        get.onsuccess = () => { db.close(); resolve(get.result === 'ok'); };
-        get.onerror = () => reject(get.error);
-      };
-      tx.onerror = () => reject(tx.error);
-    };
-  });
+async function start() {
+  try {
+    await openDB();
+    window.addEventListener('hashchange', route);
+    await route();
+  } catch (e) {
+    view.replaceChildren(h('div', { class: 'card empty' }, 'تعذّر فتح قاعدة البيانات: ' + (e && e.message || e)));
+  }
 }
-
-mark('st-js', true, 'يعمل');
-
-testIndexedDB()
-  .then(ok => mark('st-db', ok, ok ? 'يعمل' : 'فشل'))
-  .catch(() => mark('st-db', false, 'فشل'));
-
-try {
-  const v = window.Android && window.Android.version();
-  mark('st-bridge', !!v, v ? 'يعمل ' + v : 'غير موجود');
-} catch (e) {
-  mark('st-bridge', false, 'فشل');
-}
-
-let n = 0;
-document.getElementById('btn').addEventListener('click', (e) => {
-  n += 1;
-  e.currentTarget.textContent = 'ضغطت ' + n + ' مرة';
-});
+start();

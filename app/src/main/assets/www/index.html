@@ -5,41 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>دفتر الديون</title>
   <link rel="stylesheet" href="css/theme.css">
-  <style>
-    * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
-    body { min-height: 100vh; padding: 28px 18px; }
-    h1 { font-size: 28px; margin: 8px 0 20px; }
-    .card { background: var(--card); border-radius: var(--radius); padding: 22px; margin-bottom: var(--gap); }
-    .card.alt { background: var(--card-2); }
-    .welcome { font-size: 22px; margin: 0 0 8px; }
-    .dim { color: var(--text-dim); margin: 0; line-height: 1.8; }
-    .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--card-2); }
-    .row:last-child { border-bottom: 0; }
-    .badge { padding: 4px 14px; border-radius: 999px; font-size: 14px; background: var(--card-2); color: var(--text-dim); }
-    .badge.ok { background: var(--ok); color: #0D0D12; }
-    .badge.bad { background: var(--danger); color: #fff; }
-    .btn { display: block; width: 100%; border: 0; border-radius: var(--radius); padding: 18px; font-size: 18px; font-family: inherit; background: var(--accent); color: #fff; }
-    .btn:active { opacity: .85; }
-  </style>
 </head>
 <body>
-  <h1>دفتر الديون</h1>
-
-  <div class="card">
-    <p class="welcome">مرحبا 👋</p>
-    <p class="dim">المرحلة 0: التأكد من أن خط البناء يعمل على هاتفك.</p>
-  </div>
-
-  <div class="card alt">
-    <div class="row"><span>واجهة HTML</span><span class="badge ok">يعمل</span></div>
-    <div class="row"><span>JavaScript (وحدات ES)</span><span class="badge" id="st-js">...</span></div>
-    <div class="row"><span>التخزين (IndexedDB)</span><span class="badge" id="st-db">...</span></div>
-    <div class="row"><span>الجسر الأصلي</span><span class="badge" id="st-bridge">...</span></div>
-  </div>
-
-  <button class="btn" id="btn">اختبار الضغط</button>
-
+  <main id="view"></main>
+  <nav class="nav" id="nav">
+    <a href="#/" data-tab="home">الزبائن</a>
+    <a href="#/products" data-tab="products">المنتجات</a>
+    <a href="#/settings" data-tab="settings">الإعدادات</a>
+  </nav>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -36,6 +36,13 @@ jobs:
           yes | "$SDKM" --licenses > /dev/null || true
           "$SDKM" "platforms;android-35" "build-tools;35.0.0" || echo "sdkmanager skipped"
 
+      - name: Fetch Cairo font (best effort)
+        run: |
+          mkdir -p app/src/main/assets/www/fonts
+          curl -fsSL -o app/src/main/assets/www/fonts/Cairo.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf" || echo "font skipped"
+          if [ -f app/src/main/assets/www/fonts/Cairo.ttf ] && [ "$(stat -c %s app/src/main/assets/www/fonts/Cairo.ttf)" -lt 10000 ]; then rm -f app/src/main/assets/www/fonts/Cairo.ttf; fi
+          ls -la app/src/main/assets/www/fonts || true
+
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace assembleDebug
 
