@@ -20,3 +20,14 @@ export function matches(query, nameNorm) {
   const hay = nameNorm ?? '';
   return q.split(' ').every(t => hay.includes(t));
 }
+
+/** اقتراحات العلامات: ما يحوي النص المكتوب (موحّدًا)، دون المطابق تمامًا، بحدّ أقصى. */
+export function suggestBrands(brandNames, typed, limit = 6) {
+  const q = normalize(typed);
+  return brandNames
+    .filter(n => {
+      const nn = normalize(n);
+      return nn !== q && (!q || nn.includes(q));
+    })
+    .slice(0, limit);
+}

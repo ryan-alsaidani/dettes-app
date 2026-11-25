@@ -21,3 +21,12 @@ export function formatMillimes(m) {
   const a = Math.abs(n);
   return `${sign}${Math.floor(a / 1000)}.${String(a % 1000).padStart(3, '0')} د`;
 }
+
+/** مليم → نص لحقل الإدخال: 1500 → "1.5" ، 2000 → "2" ، 250 → "0.25". */
+export function toInputString(m) {
+  const n = Math.round(Number(m) || 0);
+  const a = Math.abs(n);
+  let s = `${Math.floor(a / 1000)}.${String(a % 1000).padStart(3, '0')}`.replace(/\.?0+$/, '');
+  if (s === '') s = '0';
+  return (n < 0 ? '-' : '') + s;
+}

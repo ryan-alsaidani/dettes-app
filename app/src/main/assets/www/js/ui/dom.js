@@ -22,7 +22,7 @@ export function toast(msg) {
   setTimeout(() => t.remove(), 2200);
 }
 
-function sheet(content) {
+export function sheet(content) {
   const back = h('div', { class: 'backdrop' });
   const box = h('div', { class: 'sheet' }, content);
   back.append(box);

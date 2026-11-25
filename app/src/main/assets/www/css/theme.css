@@ -68,3 +68,15 @@ a { color: inherit; text-decoration: none; }
 .sheet-text { font-size: 18px; line-height: 1.9; margin: 0 0 18px; }
 
 .toast { position: fixed; bottom: 100px; inset-inline: 24px; background: var(--card-2); color: var(--text); padding: 14px 18px; border-radius: var(--radius); text-align: center; z-index: 20; }
+
+/* ===== المرحلة 2: نماذج المنتجات ===== */
+.sheet { max-height: 92vh; overflow-y: auto; }
+.field { margin-bottom: 2px; }
+.lbl { display: block; color: var(--text-dim); font-size: 14px; margin: 0 6px 6px; }
+.area { min-height: 90px; resize: none; }
+.row-inline { display: flex; gap: 10px; align-items: flex-start; }
+.row-inline .grow { flex: 1; }
+.btn.inline { width: auto; padding: 16px 22px; margin-bottom: var(--gap); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 var(--gap); }
+.chip { background: var(--card-2); border: 0; border-radius: 999px; padding: 8px 16px; color: var(--text); font-family: inherit; font-size: 15px; }
+.center { text-align: center; }

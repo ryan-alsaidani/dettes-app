@@ -2,6 +2,7 @@ package com.ryan.dettes;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.webkit.WebResourceRequest;
@@ -11,6 +12,11 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import androidx.webkit.WebViewAssetLoader;
+
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
+
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
 
@@ -50,12 +56,33 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.addJavascriptInterface(new Bridge(), "Android");
+        webView.addJavascriptInterface(new Bridge(this), "Android");
 
         if (savedInstanceState == null) {
             webView.loadUrl(START_URL);
         } else {
             webView.restoreState(savedInstanceState);
+        }
+    }
+
+    /** يُستدعى من الجسر على خيط الواجهة. */
+    public void startScan() {
+        IntentIntegrator integrator = new IntentIntegrator(this);
+        integrator.setPrompt("وجّه الكاميرا نحو الباركود");
+        integrator.setBeepEnabled(false);
+        integrator.setOrientationLocked(false);
+        integrator.initiateScan();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if (result != null) {
+            String contents = result.getContents();
+            String arg = contents == null ? "null" : JSONObject.quote(contents);
+            webView.evaluateJavascript("window.__onBarcode && window.__onBarcode(" + arg + ")", null);
+        } else {
+            super.onActivityResult(requestCode, resultCode, data);
         }
     }
 

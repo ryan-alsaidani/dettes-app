@@ -2,7 +2,7 @@ import { openDB } from './db.js';
 import { h } from './ui/dom.js';
 import { renderHome } from './ui/home.js';
 import { renderCustomer } from './ui/customer.js';
-import { renderProducts } from './ui/product.js';
+import { renderProducts } from "./ui/product.js";
 import { renderSettings } from './ui/settings.js';
 
 const view = document.getElementById('view');
