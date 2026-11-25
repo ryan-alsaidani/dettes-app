@@ -80,3 +80,5 @@ export async function undoPayment(paymentId) {
     tx.onabort = () => reject(tx.error);
   });
 }
+
+export const listPayments = (customerId) => db.getAllByIndex('payments', 'customerId', customerId);

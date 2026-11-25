@@ -23,3 +23,13 @@ export function scanBarcode() {
     window.Android.scanBarcode();
   });
 }
+
+export function hasPrint() {
+  return !!(window.Android && typeof window.Android.printHtml === 'function');
+}
+
+/** يفتح حوار الطباعة الأصلي لصفحة HTML كاملة. */
+export function printHtml(html) {
+  if (!hasPrint()) throw new Error('no-bridge');
+  window.Android.printHtml(html);
+}

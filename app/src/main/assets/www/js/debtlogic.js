@@ -42,25 +42,32 @@ export function sortDebts(debts, mode) {
   return arr.sort(byDateDesc);
 }
 
-/** تجميع حسب الفاتورة. orders: Map(id → order). يعيد [{order, items, total, remaining}]. */
+/**
+ * تجميع حسب الفاتورة. orders: Map(id → order). يعيد [{order, items, total, remaining, maxItem}].
+ * في وضع 'highest' تُرتَّب البنود داخل الفاتورة بالأغلى أولًا، وتُرتَّب الفواتير بأغلى بند فيها
+ * (لا بمجموعها) حتى يظهر الأغلى ثمنًا في الأعلى فعلًا.
+ */
 export function groupByOrder(debts, orders, mode) {
   const groups = new Map();
   for (const d of debts) {
     let g = groups.get(d.orderId);
     if (!g) {
       const order = orders.get(d.orderId) || { id: d.orderId, date: d.date, note: null };
-      g = { order, items: [], total: 0, remaining: 0 };
+      g = { order, items: [], total: 0, remaining: 0, maxItem: 0 };
       groups.set(d.orderId, g);
     }
     g.items.push(d);
     g.total += totalOf(d);
     g.remaining += d.remaining || 0;
+    g.maxItem = Math.max(g.maxItem, totalOf(d));
   }
   const arr = [...groups.values()];
-  for (const g of arr) g.items.sort((a, b) => a.id - b.id);
+  for (const g of arr) {
+    g.items.sort(mode === 'highest' ? (a, b) => totalOf(b) - totalOf(a) || a.id - b.id : (a, b) => a.id - b.id);
+  }
   const key = (g) => g.order;
   if (mode === 'oldest') arr.sort((a, b) => byDateAsc(key(a), key(b)));
-  else if (mode === 'highest') arr.sort((a, b) => b.total - a.total || byDateDesc(key(a), key(b)));
+  else if (mode === 'highest') arr.sort((a, b) => b.maxItem - a.maxItem || b.total - a.total || byDateDesc(key(a), key(b)));
   else arr.sort((a, b) => byDateDesc(key(a), key(b)));
   return arr;
 }

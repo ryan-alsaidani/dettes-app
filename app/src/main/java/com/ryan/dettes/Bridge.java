@@ -13,7 +13,7 @@ public class Bridge {
 
     @JavascriptInterface
     public String version() {
-        return "0.2.0";
+        return "0.5.0";
     }
 
     /** يفتح ماسح الباركود. النتيجة تصل لاحقًا إلى window.__onBarcode(text|null). */
@@ -23,6 +23,17 @@ public class Bridge {
             @Override
             public void run() {
                 activity.startScan();
+            }
+        });
+    }
+
+    /** يفتح حوار الطباعة لصفحة HTML كاملة. */
+    @JavascriptInterface
+    public void printHtml(final String html) {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                activity.printHtml(html);
             }
         });
     }

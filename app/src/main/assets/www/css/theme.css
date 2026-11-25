@@ -115,3 +115,7 @@ a { color: inherit; text-decoration: none; }
 .opt.on { border-color: var(--accent); }
 .pay-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--card-2); }
 .pay-line:last-child { border-bottom: 0; }
+
+/* ===== المرحلة 5: الطباعة ===== */
+.group-side { text-align: end; }
+.group-side .link { padding: 4px 0 0; }

@@ -2,9 +2,15 @@ package com.ryan.dettes;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -23,7 +29,11 @@ public class MainActivity extends Activity {
     private static final String START_URL =
             "https://appassets.androidplatform.net/assets/www/index.html";
 
+    private static final String BASE_URL = "https://appassets.androidplatform.net/";
+
     private WebView webView;
+    private WebView printWebView; // يبقى مرجعه حيًّا حتى تنتهي الطباعة
+    private WebViewAssetLoader assetLoader;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -39,7 +49,7 @@ public class MainActivity extends Activity {
         webView.setBackgroundColor(bg);
         setContentView(webView);
 
-        final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
+        assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
 
@@ -84,6 +94,41 @@ public class MainActivity extends Activity {
         } else {
             super.onActivityResult(requestCode, resultCode, data);
         }
+    }
+
+    /** طباعة HTML عبر حوار الطباعة الأصلي (طابعة أو «حفظ كـPDF»). يُستدعى على خيط الواجهة. */
+    public void printHtml(final String html) {
+        final WebView pv = new WebView(this);
+        pv.getSettings().setJavaScriptEnabled(false);
+        pv.getSettings().setAllowFileAccess(false);
+        final boolean[] started = {false};
+        pv.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                return assetLoader.shouldInterceptRequest(request.getUrl());
+            }
+
+            @Override
+            public void onPageFinished(final WebView view, String url) {
+                if (started[0]) return;
+                started[0] = true;
+                // مهلة قصيرة ليكتمل تحميل الخط قبل التقاط الصفحة
+                new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        PrintManager pm = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+                        String job = "دفتر الديون";
+                        PrintDocumentAdapter adapter = view.createPrintDocumentAdapter(job);
+                        PrintAttributes attrs = new PrintAttributes.Builder()
+                                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                .build();
+                        pm.print(job, adapter, attrs);
+                    }
+                }, 700);
+            }
+        });
+        printWebView = pv;
+        pv.loadDataWithBaseURL(BASE_URL, html, "text/html", "utf-8", null);
     }
 
     @Override

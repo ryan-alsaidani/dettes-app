@@ -1,7 +1,10 @@
 import { h, toast, confirmDialog, messageDialog, customerForm, itemForm, sheet } from './dom.js';
 import { getCustomer, saveCustomer, deleteCustomer, customerDebtCount, listCustomerNames } from '../customers.js';
 import { loadCustomerData, markPaid, updateDebt, deleteDebt } from '../debts.js';
-import { getLastPayment, undoPayment } from '../payments.js';
+import { getLastPayment, undoPayment, listPayments } from '../payments.js';
+import { getSetting } from '../settings.js';
+import { buildStatementHtml } from '../invoice.js';
+import { hasPrint, printHtml } from '../bridge.js';
 import { statusOf, STATUS_LABEL, totalOf, summarize, filterByStatus, sortDebts, groupByOrder, debtHaystack } from '../debtlogic.js';
 import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
@@ -30,6 +33,26 @@ export async function renderCustomer(root, id) {
   const list = h('div', { class: 'list' });
 
   const reload = () => renderCustomer(root, id);
+
+  async function printDebts(list, title, withPayments) {
+    if (!hasPrint()) { await messageDialog('الطباعة متاحة داخل التطبيق فقط.'); return; }
+    if (!list.length) { await messageDialog('لا بنود للطباعة.'); return; }
+    const [shopName, shopPhone] = await Promise.all([getSetting('shopName', ''), getSetting('shopPhone', '')]);
+    const payments = withPayments ? await listPayments(id) : [];
+    printHtml(buildStatementHtml({
+      title, shop: { name: shopName, phone: shopPhone }, customer, debts: list, orders, payments,
+      overallRemaining: sum.remaining,
+    }));
+  }
+
+  function printSheet() {
+    const s = sheet([
+      h('h2', { class: 'sheet-title' }, 'طباعة كشف الحساب'),
+      h('button', { class: 'btn', onClick: () => { s.close(); printDebts(debts.filter(d => d.remaining > 0), 'كشف حساب', false); } }, 'غير المسدَّد فقط'),
+      h('button', { class: 'btn ghost', onClick: () => { s.close(); printDebts(debts, 'كشف حساب', true); } }, 'كل الديون مع الدفعات'),
+      h('button', { class: 'btn ghost', onClick: () => s.close() }, 'إلغاء'),
+    ]);
+  }
 
   async function undoLast() {
     if (await confirmDialog('التراجع عن دفعة ' + formatMillimes(last.amount) + ' (' + formatDate(last.date) + ')؟ سيعود المتبقي على الديون التي سُدِّدت بها.', 'تراجع', true)) {
@@ -110,7 +133,9 @@ export async function renderCustomer(root, id) {
         h('div', null,
           h('div', { class: 'item-name' }, formatDate(g.order.date)),
           g.order.note ? h('div', { class: 'dim small' }, g.order.note) : null),
-        h('div', { class: 'dim small' }, 'الإجمالي ' + formatMillimes(g.total) + ' • المتبقي ' + formatMillimes(g.remaining))));
+        h('div', { class: 'group-side' },
+          h('div', { class: 'dim small' }, 'الإجمالي ' + formatMillimes(g.total) + ' • المتبقي ' + formatMillimes(g.remaining)),
+          h('button', { class: 'link', type: 'button', onClick: () => printDebts(debts.filter(d => d.orderId === g.order.id), 'فاتورة', false) }, 'طباعة الفاتورة'))));
       g.items.forEach(d => list.append(debtCard(d)));
     }
   }
@@ -137,7 +162,8 @@ export async function renderCustomer(root, id) {
           h('div', { class: 'dim small' }, formatDate(last.date) + (last.change ? ' • أُرجع للزبون ' + formatMillimes(last.change) : ''))),
         h('button', { class: 'btn ghost inline', onClick: undoLast }, 'تراجع'))) : null,
     search, controls, list,
-    h('div', { class: 'btn-row spaced' },
+    h('button', { class: 'btn ghost spaced', onClick: printSheet }, 'طباعة كشف الحساب'),
+    h('div', { class: 'btn-row' },
       h('button', { class: 'btn ghost', onClick: async () => {
         const v = await customerForm(customer, await listCustomerNames());
         if (!v) return;
