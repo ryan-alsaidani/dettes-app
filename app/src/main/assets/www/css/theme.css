@@ -119,3 +119,7 @@ a { color: inherit; text-decoration: none; }
 /* ===== المرحلة 5: الطباعة ===== */
 .group-side { text-align: end; }
 .group-side .link { padding: 4px 0 0; }
+
+/* ===== المرحلة 6: النسخ الاحتياطي ===== */
+.remind { border: 2px solid var(--warn); }
+.remind .btn { margin-bottom: 0; padding: 13px; font-size: 16px; }

@@ -33,3 +33,27 @@ export function printHtml(html) {
   if (!hasPrint()) throw new Error('no-bridge');
   window.Android.printHtml(html);
 }
+
+let pendingSave = null;
+
+// يستدعيها الغلاف الأصلي بعد «حفظ ملف»: (true) نجح، (false, رسالة|null) فشل أو أُلغي.
+window.__onSaved = (ok, msg) => {
+  if (pendingSave) {
+    const resolve = pendingSave;
+    pendingSave = null;
+    resolve({ ok: !!ok, message: msg || null });
+  }
+};
+
+export function hasSave() {
+  return !!(window.Android && typeof window.Android.saveFile === 'function');
+}
+
+/** يفتح نافذة حفظ ملف. يعيد {ok, message}. ok=false مع message=null يعني أن المستخدم ألغى. */
+export function saveFile(name, mime, text) {
+  return new Promise((resolve, reject) => {
+    if (!hasSave()) { reject(new Error('no-bridge')); return; }
+    pendingSave = resolve;
+    window.Android.saveFile(name, mime, text);
+  });
+}

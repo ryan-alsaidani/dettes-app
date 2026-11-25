@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+
+  <!-- Main capsule -->
+  <rect x="56" y="56" width="400" height="400" rx="112"
+        fill="#7C5CFF"/>
+
+  <!-- Ledger -->
+  <rect x="123" y="111" width="266" height="290" rx="28"
+        fill="#ECEAF5"/>
+
+  <!-- Binding spine -->
+  <path d="M177 111 V401"
+        stroke="#7C5CFF" stroke-width="13"/>
+
+  <!-- Binding holes -->
+  <g fill="#7C5CFF">
+    <circle cx="150" cy="163" r="7"/>
+    <circle cx="150" cy="235" r="7"/>
+    <circle cx="150" cy="307" r="7"/>
+    <circle cx="150" cy="379" r="7"/>
+  </g>
+
+  <!-- Organized customer records -->
+  <g fill="none" stroke="#7C5CFF"
+     stroke-width="10" stroke-linecap="round">
+
+    <!-- Record 1 -->
+    <path d="M205 157 H351"/>
+    <path d="M205 181 H293"/>
+
+    <!-- Record 2 -->
+    <path d="M205 229 H351"/>
+    <path d="M205 253 H293"/>
+
+    <!-- Record 3 -->
+    <path d="M205 301 H351"/>
+    <path d="M205 325 H293"/>
+
+  </g>
+
+  <!-- Record separators -->
+  <g stroke="#7C5CFF" stroke-width="3" opacity="0.35">
+    <path d="M195 205 H359"/>
+    <path d="M195 277 H359"/>
+  </g>
+
+  <!-- Payment status -->
+  <circle cx="348" cy="351" r="39" fill="#3FB67A"/>
+
+  <path d="M329 351 L342 364 L368 337"
+        fill="none"
+        stroke="#ECEAF5"
+        stroke-width="10"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+
+</svg>

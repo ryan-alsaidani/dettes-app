@@ -2,9 +2,26 @@ import { h, toast, customerForm } from './dom.js';
 import { listCustomersWithTotals, saveCustomer } from '../customers.js';
 import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
+import { getSetting, setSetting } from '../settings.js';
+import { daysSince } from '../backup.js';
 
 export async function renderHome(root) {
   let all = await listCustomersWithTotals();
+  const lastBackup = await getSetting('lastBackupAt', 0);
+  const snoozeUntil = await getSetting('backupSnoozeUntil', 0);
+  const staleDays = daysSince(lastBackup);
+  const showReminder = all.length > 0 && Date.now() > snoozeUntil && (staleDays === null || staleDays >= 7);
+  const reminder = showReminder ? h('div', { class: 'card remind' },
+    h('div', { class: 'item-name' }, 'احفظ نسخة احتياطية'),
+    h('p', { class: 'dim small' }, staleDays === null
+      ? 'لم تحفظ أي نسخة بعد. إن مُسحت بيانات التطبيق ضاع كل شيء.'
+      : 'مضى ' + staleDays + ' يومًا على آخر نسخة احتياطية.'),
+    h('div', { class: 'btn-row' },
+      h('button', { class: 'btn', onClick: () => { location.hash = '#/settings'; } }, 'حفظ الآن'),
+      h('button', { class: 'btn ghost', onClick: async () => {
+        await setSetting('backupSnoozeUntil', Date.now() + 86400000);
+        reminder.remove();
+      } }, 'لاحقًا'))) : null;
   const list = h('div', { class: 'list' });
   const count = h('p', { class: 'dim small' });
   const search = h('input', { class: 'input', type: 'search',
@@ -47,6 +64,7 @@ export async function renderHome(root) {
 
   root.replaceChildren(
     h('h1', { class: 'title' }, 'الزبائن'),
+    reminder,
     search, addBtn, count, list);
   draw();
 }
