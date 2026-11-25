@@ -1,6 +1,7 @@
 import { h, toast, confirmDialog, messageDialog, customerForm, itemForm, sheet } from './dom.js';
 import { getCustomer, saveCustomer, deleteCustomer, customerDebtCount, listCustomerNames } from '../customers.js';
 import { loadCustomerData, markPaid, updateDebt, deleteDebt } from '../debts.js';
+import { getLastPayment, undoPayment } from '../payments.js';
 import { statusOf, STATUS_LABEL, totalOf, summarize, filterByStatus, sortDebts, groupByOrder, debtHaystack } from '../debtlogic.js';
 import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
@@ -23,11 +24,20 @@ export async function renderCustomer(root, id) {
   if (!customer) { location.hash = '#/'; return; }
   const { debts, orders } = await loadCustomerData(id);
   const sum = summarize(debts);
+  const last = await getLastPayment(id);
   const search = h('input', { class: 'input', type: 'search', placeholder: 'ابحث في الديون: بند، ملاحظة، تاريخ، مبلغ...' });
   const controls = h('div', null);
   const list = h('div', { class: 'list' });
 
   const reload = () => renderCustomer(root, id);
+
+  async function undoLast() {
+    if (await confirmDialog('التراجع عن دفعة ' + formatMillimes(last.amount) + ' (' + formatDate(last.date) + ')؟ سيعود المتبقي على الديون التي سُدِّدت بها.', 'تراجع', true)) {
+      await undoPayment(last.id);
+      toast('تم التراجع عن الدفعة');
+      reload();
+    }
+  }
 
   async function payFull(d) {
     const what = d.paid > 0 ? 'الباقي ' + formatMillimes(d.remaining) : formatMillimes(d.remaining);
@@ -117,7 +127,15 @@ export async function renderCustomer(root, id) {
       h('div', { class: 'big' }, formatMillimes(sum.remaining)),
       debts.length ? h('p', { class: 'dim small' },
         `${sum.open} ديون مفتوحة • الإجمالي ${formatMillimes(sum.total)} • المدفوع ${formatMillimes(sum.paid)}`) : null),
-    h('button', { class: 'btn', onClick: () => { location.hash = '#/debt/' + id; } }, '+ تسجيل دين'),
+    h('div', { class: 'btn-row' },
+      h('button', { class: 'btn', onClick: () => { location.hash = '#/debt/' + id; } }, '+ تسجيل دين'),
+      h('button', { class: 'btn ok', onClick: () => { location.hash = '#/pay/' + id; } }, 'تسديد مبلغ')),
+    last ? h('div', { class: 'card' },
+      h('div', { class: 'debt-top' },
+        h('div', null,
+          h('div', { class: 'item-name' }, 'آخر دفعة: ' + formatMillimes(last.amount)),
+          h('div', { class: 'dim small' }, formatDate(last.date) + (last.change ? ' • أُرجع للزبون ' + formatMillimes(last.change) : ''))),
+        h('button', { class: 'btn ghost inline', onClick: undoLast }, 'تراجع'))) : null,
     search, controls, list,
     h('div', { class: 'btn-row spaced' },
       h('button', { class: 'btn ghost', onClick: async () => {
