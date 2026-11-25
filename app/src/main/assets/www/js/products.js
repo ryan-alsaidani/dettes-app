@@ -1,5 +1,6 @@
 import * as db from './db.js';
 import { normalize } from './search.js';
+import { formatMillimes, toInputString } from './money.js';
 
 export const listProducts = () => db.getAll('products');
 export const getProduct = (id) => db.get('products', id);
@@ -52,4 +53,12 @@ export async function saveProduct({ id, name, barcode, brand, price, weight, des
   };
   if (id) obj.id = id;
   return db.put('products', obj);
+}
+
+/** نص البحث الموحَّد لمنتج: الاسم والعلامة والباركود والوزن والوصف والسعر. */
+export function productHaystack(p) {
+  return normalize([
+    p.name, p.brand, p.barcode, p.weight, p.description,
+    toInputString(p.price), formatMillimes(p.price),
+  ].filter(Boolean).join(' '));
 }

@@ -3,6 +3,8 @@
 export function normalize(str) {
   return String(str ?? '')
     .toLowerCase()
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
     .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '') // التشكيل
     .replace(/\u0640/g, '')                              // التطويل
     .replace(/[أإآٱ]/g, 'ا')

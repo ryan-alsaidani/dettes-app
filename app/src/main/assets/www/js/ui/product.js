@@ -11,7 +11,7 @@ function field(label, input) {
 }
 
 /** نموذج منتج (جديد أو تعديل). يحفظ بنفسه. يعيد true إن تغيّر شيء، وإلا false. */
-function productForm(initial = {}, brands = []) {
+export function productForm(initial = {}, brands = []) {
   return new Promise(resolve => {
     const isEdit = !!initial.id;
     const name = h('input', { class: 'input', value: initial.name || '', placeholder: 'مثال: قلم حبر أزرق' });
@@ -57,17 +57,18 @@ function productForm(initial = {}, brands = []) {
           err.textContent = '';
           const p = parseDinars(price.value);
           if (p === null) { err.textContent = 'السعر غير صالح (مثال: 1.5 أو 2.250)'; return; }
+          let savedId;
           try {
-            await P.saveProduct({ id: initial.id, name: name.value, barcode: barcode.value, brand: brand.value,
+            savedId = await P.saveProduct({ id: initial.id, name: name.value, barcode: barcode.value, brand: brand.value,
               price: p, weight: weight.value, description: desc.value });
           } catch (e) { err.textContent = e.message; return; }
-          s.close(); resolve(true);
+          s.close(); resolve({ id: savedId });
         } }, 'حفظ'),
         h('button', { class: 'btn ghost', onClick: () => { s.close(); resolve(false); } }, 'إلغاء')),
       isEdit ? h('button', { class: 'btn danger', onClick: async () => {
         if (await confirmDialog('حذف المنتج «' + initial.name + '»؟ الديون المسجَّلة سابقًا لا تتأثر.', 'حذف', true)) {
           await P.deleteProduct(initial.id);
-          s.close(); resolve(true);
+          s.close(); resolve({ deleted: true });
         }
       } }, 'حذف المنتج') : null,
     ]);
@@ -80,9 +81,11 @@ export async function renderProducts(root) {
   let brands = await P.listBrands();
   all.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 
+  const hay = new WeakMap();
+  const hayOf = (p) => { let v = hay.get(p); if (v === undefined) { v = P.productHaystack(p); hay.set(p, v); } return v; };
   const list = h('div', { class: 'list' });
   const count = h('p', { class: 'dim small' });
-  const search = h('input', { class: 'input', type: 'search', placeholder: 'ابحث بالاسم أو العلامة أو الباركود...' });
+  const search = h('input', { class: 'input', type: 'search', placeholder: 'ابحث: اسم، علامة، باركود، وصف، وزن، سعر...' });
 
   async function reload() {
     all = await P.listProducts();
@@ -100,9 +103,7 @@ export async function renderProducts(root) {
 
   function draw() {
     const q = search.value.trim();
-    const digits = /^\d{3,}$/.test(q);
-    const shown = all.filter(p =>
-      matches(q, p.nameNorm + ' ' + (p.brandNorm || '')) || (digits && p.barcode && p.barcode.includes(q)));
+    const shown = all.filter(p => matches(q, hayOf(p)));
     list.replaceChildren();
     count.textContent = all.length ? `${shown.length} من ${all.length} منتج` : '';
     if (!all.length) {
