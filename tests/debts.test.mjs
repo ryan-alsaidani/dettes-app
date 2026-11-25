@@ -49,6 +49,19 @@ assert.equal(gNew[0].remaining, 3000);
 assert.deepEqual(gNew[0].items.map(d => d.id), [1, 2]);
 assert.deepEqual(groupByOrder(debts, orders, 'oldest').map(x => x.order.id), [11, 12, 10]);
 assert.deepEqual(groupByOrder(debts, orders, 'highest').map(x => x.order.id), [11, 10, 12]);
+// «الأعلى ثمنًا» داخل العرض المجمَّع: الفاتورة تُرتَّب بأغلى بند فيها لا بمجموعها، والبنود داخلها بالأغلى أولًا
+{
+  const ds = [
+    D(21, 20, '2026-04-01', 1000, 1, 0, 'أ'), D(22, 20, '2026-04-01', 1000, 1, 0, 'ب'), D(23, 20, '2026-04-01', 1000, 1, 0, 'ج'), // مجموع 3000، أغلى بند 1000
+    D(24, 21, '2026-04-02', 2500, 1, 0, 'د'),                                                                                   // مجموع 2500، أغلى بند 2500
+    D(25, 20, '2026-04-01', 1800, 1, 0, 'هـ'),                                                                                  // يرفع الفاتورة 20: مجموع 4800، أغلى بند 1800
+  ];
+  const os = new Map([[20, { id: 20, date: '2026-04-01', note: null }], [21, { id: 21, date: '2026-04-02', note: null }]]);
+  const g = groupByOrder(ds, os, 'highest');
+  assert.deepEqual(g.map(x => x.order.id), [21, 20]);               // 2500 > 1800 رغم أن مجموع 20 أكبر
+  assert.deepEqual(g[1].items.map(d => d.id), [25, 21, 22, 23]);    // بنود الفاتورة 20 بالأغلى أولًا
+  assert.deepEqual(sortDebts(ds, 'highest').map(d => d.id), [24, 25, 23, 22, 21]); // التعادل: الأحدث أولًا
+}
 // فاتورة غير موجودة في الخريطة لا تكسر التجميع
 assert.equal(groupByOrder([D(9, 99, '2026-05-05', 100, 1)], new Map(), 'newest')[0].order.date, '2026-05-05');
 
