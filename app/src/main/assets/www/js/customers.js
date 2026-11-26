@@ -1,7 +1,9 @@
 import * as db from './db.js';
 import { normalize } from './search.js';
+import { requireActive } from './license.js';
 
 export async function saveCustomer({ id, name, phone, note }) {
+  requireActive();
   const clean = String(name ?? '').trim();
   if (!clean) throw new Error('الاسم مطلوب');
   const old = id ? await db.get('customers', id) : null;
@@ -57,6 +59,7 @@ export async function customerDebtCount(id) {
 }
 
 export async function deleteCustomer(id) {
+  requireActive();
   await db.del('customers', id);
   for (const p of await db.getAllByIndex('payments', 'customerId', id)) await db.del('payments', p.id);
   for (const o of await db.getAllByIndex('orders', 'customerId', id)) await db.del('orders', o.id);

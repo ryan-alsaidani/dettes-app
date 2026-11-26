@@ -12,6 +12,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      HAS_KS: ${{ secrets.KS_B64 != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,11 +55,30 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Publish APK as release (direct download)
+      # اختياري: يعمل فقط إن أضفتَ أسرار التوقيع (KS_B64, KS_PASS, KS_ALIAS, KS_KEYPASS). لا يُفشل البناء أبدًا.
+      - name: Build signed release APK (optional)
+        if: env.HAS_KS == 'true'
+        continue-on-error: true
+        env:
+          KS_B64: ${{ secrets.KS_B64 }}
+          KS_PASS: ${{ secrets.KS_PASS }}
+          KS_ALIAS: ${{ secrets.KS_ALIAS }}
+          KS_KEYPASS: ${{ secrets.KS_KEYPASS }}
+        run: |
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          export KS_FILE="$RUNNER_TEMP/release.keystore"
+          gradle --no-daemon --stacktrace assembleRelease
+
+      - name: Publish APKs as release (direct download)
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk dettes.apk
+          FILES="dettes.apk"
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk dettes-release.apk
+            FILES="$FILES dettes-release.apk"
+          fi
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest dettes.apk --target "${{ github.sha }}" --title "latest" --notes "build ${{ github.sha }}" --prerelease
+          gh release create latest $FILES --target "${{ github.sha }}" --title "latest" --notes "build ${{ github.sha }}" --prerelease

@@ -1,12 +1,14 @@
 import * as db from './db.js';
 import { openDB } from './db.js';
 import { todayISO } from './dates.js';
+import { requireActive } from './license.js';
 
 /**
  * يطبّق تسديدًا في معاملة واحدة: يحدّث الديون ويسجّل الدفعة مع تفاصيل التخصيص (للتراجع).
  * items: [{debtId, pay}]  received: المبلغ المستلم (الفرق عن المجموع المطبَّق = الباقي للزبون)
  */
 export async function applyPayment({ customerId, items, received }) {
+  requireActive();
   if (!items || !items.length) throw new Error('لا شيء لتسديده');
   const dbx = await openDB();
   return new Promise((resolve, reject) => {
@@ -55,6 +57,7 @@ export async function getLastPayment(customerId) {
 
 /** يعيد المبالغ إلى الديون ويحذف سجل الدفعة. الديون المحذوفة تُتجاهل. */
 export async function undoPayment(paymentId) {
+  requireActive();
   const dbx = await openDB();
   return new Promise((resolve, reject) => {
     const tx = dbx.transaction(['debts', 'payments'], 'readwrite');

@@ -6,3 +6,6 @@ local.properties
 !app/debug.keystore
 *.jks
 .idea/
+license-tool*.html
+release-signing*
+secret/

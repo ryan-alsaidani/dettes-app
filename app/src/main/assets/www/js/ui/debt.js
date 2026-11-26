@@ -7,6 +7,7 @@ import { formatMillimes } from '../money.js';
 import { todayISO } from '../dates.js';
 import { scanBarcode } from '../bridge.js';
 import { productForm } from './product.js';
+import { licenseActive } from './licensecard.js';
 
 // مسودة كل زبون تبقى طوال الجلسة، فلا يضيع ما أُدخل إن خرج مؤقتًا.
 const drafts = new Map();
@@ -38,6 +39,7 @@ export async function renderNewDebt(root, customerId) {
 
   async function handleUnknownCode(code) {
     toast('باركود غير معروف: ' + code);
+    if (!licenseActive()) { toast('أضفه كبند حر (اسم وسعر)'); return; } // إضافة منتج جديد تحتاج اشتراكًا فعّالًا
     const res = await productForm({ barcode: code }, await P.listBrands());
     if (res && res.id) {
       const np = await P.getProduct(res.id);

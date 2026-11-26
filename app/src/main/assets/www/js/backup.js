@@ -1,5 +1,6 @@
 // النسخ الاحتياطي: بناء/تحقق (نقيّان) + تصدير/استيراد IndexedDB.
 import { openDB } from './db.js';
+import { requireActive, isLicenseRecord } from './license.js';
 
 export const BACKUP_APP = 'dettes-app';
 export const BACKUP_VERSION = 1;
@@ -75,7 +76,7 @@ export async function exportAll(now = Date.now()) {
   const data = {};
   await Promise.all(STORES.map(name => new Promise((resolve, reject) => {
     const req = db.transaction(name, 'readonly').objectStore(name).getAll();
-    req.onsuccess = () => { data[name] = req.result; resolve(); };
+    req.onsuccess = () => { data[name] = name === 'settings' ? stripLicense(req.result) : req.result; resolve(); };
     req.onerror = () => reject(req.error);
   })));
   return buildBackup(data, now);
@@ -83,18 +84,33 @@ export async function exportAll(now = Date.now()) {
 
 /** يستبدل كل البيانات بمحتوى النسخة (معاملة واحدة: إما الكل أو لا شيء). يفترض أن validateBackup نجح. */
 export async function importAll(backup) {
+  requireActive();
   const db = await openDB();
+  // حالة الترخيص تخص الجهاز: لا تدخل النسخة ولا تُستبدل بالاسترجاع (وإلا أمكن إعادة استعمال مفتاح قديم)
+  const keep = await new Promise((resolve, reject) => {
+    const req = db.transaction('settings', 'readonly').objectStore('settings').getAll();
+    req.onsuccess = () => resolve(req.result.filter(isLicenseRecord));
+    req.onerror = () => reject(req.error);
+  });
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORES, 'readwrite');
     for (const name of STORES) {
       const store = tx.objectStore(name);
       store.clear();
-      for (const rec of backup.stores[name]) store.put(rec);
+      const records = name === 'settings' ? stripLicense(backup.stores[name]) : backup.stores[name];
+      for (const rec of records) store.put(rec);
     }
+    const settingsStore = tx.objectStore('settings');
+    for (const rec of keep) settingsStore.put(rec);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error || new Error('فشل الاستيراد'));
   });
+}
+
+/** يحذف سجلات الترخيص (lic_*) من قائمة الإعدادات. */
+export function stripLicense(settings) {
+  return (settings || []).filter(r => !isLicenseRecord(r));
 }
 
 export function backupFileName(date = new Date()) {

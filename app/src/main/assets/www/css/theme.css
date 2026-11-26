@@ -123,3 +123,15 @@ a { color: inherit; text-decoration: none; }
 /* ===== المرحلة 6: النسخ الاحتياطي ===== */
 .remind { border: 2px solid var(--warn); }
 .remind .btn { margin-bottom: 0; padding: 13px; font-size: 16px; }
+
+/* ===== الاشتراك ===== */
+.lic { border: 2px solid var(--card-2); }
+.lic.okay { border-color: var(--ok); }
+.lic.low { border-color: var(--warn); }
+.lic.expired { border-color: var(--danger); }
+.lic-main { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.lic-title { font-size: 19px; font-weight: 700; }
+.lic-days { text-align: center; }
+.lic-num { display: block; font-size: 36px; font-weight: 700; line-height: 1.1; }
+.lic-btn { margin: 14px 0 0; padding: 13px; font-size: 16px; }
+.codebox { direction: ltr; text-align: left; background: var(--card-2); border-radius: var(--radius-sm); padding: 14px; font-family: monospace; font-size: 14px; line-height: 1.7; word-break: break-all; user-select: all; margin-bottom: var(--gap); }

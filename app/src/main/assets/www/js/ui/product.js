@@ -3,6 +3,7 @@ import * as P from '../products.js';
 import { matches, suggestBrands } from '../search.js';
 import { formatMillimes, parseDinars, toInputString } from '../money.js';
 import { scanBarcode } from '../bridge.js';
+import { needActive, licenseActive, licenseCard } from './licensecard.js';
 
 const MAX_SHOWN = 100;
 
@@ -76,6 +77,19 @@ export function productForm(initial = {}, brands = []) {
   });
 }
 
+/** عرض منتج للقراءة فقط (عند انتهاء الاشتراك). */
+function productInfo(p) {
+  return new Promise(resolve => {
+    const row = (k, v) => (v ? h('div', { class: 'pay-line' }, h('span', { class: 'dim' }, k), h('span', null, v)) : null);
+    const s = sheet([
+      h('h2', { class: 'sheet-title' }, p.name),
+      row('السعر', formatMillimes(p.price)),
+      row('العلامة', p.brand), row('الباركود', p.barcode), row('الوزن', p.weight), row('الوصف', p.description),
+      h('button', { class: 'btn ghost spaced', onClick: () => { s.close(); resolve(); } }, 'إغلاق'),
+    ]);
+  });
+}
+
 export async function renderProducts(root) {
   let all = await P.listProducts();
   let brands = await P.listBrands();
@@ -95,6 +109,11 @@ export async function renderProducts(root) {
   }
 
   async function openForm(initial) {
+    if (!licenseActive()) {
+      // بعد انتهاء الاشتراك: عرض فقط
+      if (initial && initial.id) await productInfo(initial); else await needActive();
+      return;
+    }
     if (await productForm(initial, brands)) {
       await reload();
       toast('تم الحفظ');
@@ -148,6 +167,7 @@ export async function renderProducts(root) {
 
   root.replaceChildren(
     h('h1', { class: 'title' }, 'المنتجات'),
+    licenseActive() ? null : licenseCard(),
     search,
     h('div', { class: 'btn-row' }, addBtn, scanBtn),
     count, list);

@@ -9,6 +9,7 @@ import { statusOf, STATUS_LABEL, totalOf, summarize, filterByStatus, sortDebts, 
 import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
 import { formatDate } from '../dates.js';
+import { needActive, licenseActive, licenseCard } from './licensecard.js';
 
 const FILTERS = [['unpaid', 'غير المدفوع'], ['paid', 'المدفوع'], ['all', 'الكل']];
 const SORTS = [['newest', 'الأحدث'], ['oldest', 'الأقدم'], ['highest', 'الأعلى ثمنًا']];
@@ -35,6 +36,7 @@ export async function renderCustomer(root, id) {
   const reload = () => renderCustomer(root, id);
 
   async function printDebts(list, title, withPayments) {
+    if (!(await needActive())) return;
     if (!hasPrint()) { await messageDialog('الطباعة متاحة داخل التطبيق فقط.'); return; }
     if (!list.length) { await messageDialog('لا بنود للطباعة.'); return; }
     const [shopName, shopPhone] = await Promise.all([getSetting('shopName', ''), getSetting('shopPhone', '')]);
@@ -55,6 +57,7 @@ export async function renderCustomer(root, id) {
   }
 
   async function undoLast() {
+    if (!(await needActive())) return;
     if (await confirmDialog('التراجع عن دفعة ' + formatMillimes(last.amount) + ' (' + formatDate(last.date) + ')؟ سيعود المتبقي على الديون التي سُدِّدت بها.', 'تراجع', true)) {
       await undoPayment(last.id);
       toast('تم التراجع عن الدفعة');
@@ -63,6 +66,7 @@ export async function renderCustomer(root, id) {
   }
 
   async function payFull(d) {
+    if (!(await needActive())) return;
     const what = d.paid > 0 ? 'الباقي ' + formatMillimes(d.remaining) : formatMillimes(d.remaining);
     if (await confirmDialog('تأكيد دفع ' + what + ' عن «' + d.nameSnapshot + '»؟', 'تم الدفع')) {
       await markPaid(d.id);
@@ -96,13 +100,13 @@ export async function renderCustomer(root, id) {
 
   function debtCard(d) {
     const st = statusOf(d);
-    return h('div', { class: 'card debt ' + st, onClick: () => debtActions(d) },
+    return h('div', { class: 'card debt ' + st, onClick: () => { if (licenseActive()) debtActions(d); } },
       h('div', { class: 'debt-top' },
         h('div', { class: 'item-name' }, d.nameSnapshot),
         h('span', { class: 'badge ' + st }, STATUS_LABEL[st])),
       h('div', { class: 'dim small' }, `${d.qty} × ${formatMillimes(d.unitPrice)} = ${formatMillimes(totalOf(d))} • ${formatDate(d.date)}`),
       st === 'partial' ? h('div', { class: 'partial-note' }, `تم دفع ${formatMillimes(d.paid)}، بقي ${formatMillimes(d.remaining)}`) : null,
-      st !== 'paid' ? h('button', { class: 'btn small-btn', onClick: (e) => { e.stopPropagation(); payFull(d); } }, 'تم دفع الثمن') : null);
+      st !== 'paid' && licenseActive() ? h('button', { class: 'btn small-btn', onClick: (e) => { e.stopPropagation(); payFull(d); } }, 'تم دفع الثمن') : null);
   }
 
   function drawControls() {
@@ -145,6 +149,7 @@ export async function renderCustomer(root, id) {
   root.replaceChildren(
     h('button', { class: 'back', onClick: () => history.back() }, '→ رجوع'),
     h('h1', { class: 'title' }, customer.name),
+    licenseActive() ? null : licenseCard(),
     h('div', { class: 'card alt' },
       customer.note ? h('p', { class: 'dim' }, customer.note) : null,
       customer.phone ? h('p', { class: 'dim' }, 'الهاتف: ' + customer.phone) : null,
@@ -154,7 +159,7 @@ export async function renderCustomer(root, id) {
         `${sum.open} ديون مفتوحة • الإجمالي ${formatMillimes(sum.total)} • المدفوع ${formatMillimes(sum.paid)}`) : null),
     h('div', { class: 'btn-row' },
       h('button', { class: 'btn', onClick: () => { location.hash = '#/debt/' + id; } }, '+ تسجيل دين'),
-      h('button', { class: 'btn ok', onClick: () => { location.hash = '#/pay/' + id; } }, 'تسديد مبلغ')),
+      h('button', { class: 'btn ok', onClick: async () => { if (await needActive()) location.hash = '#/pay/' + id; } }, 'تسديد مبلغ')),
     last ? h('div', { class: 'card' },
       h('div', { class: 'debt-top' },
         h('div', null,
@@ -162,15 +167,17 @@ export async function renderCustomer(root, id) {
           h('div', { class: 'dim small' }, formatDate(last.date) + (last.change ? ' • أُرجع للزبون ' + formatMillimes(last.change) : ''))),
         h('button', { class: 'btn ghost inline', onClick: undoLast }, 'تراجع'))) : null,
     search, controls, list,
-    h('button', { class: 'btn ghost spaced', onClick: printSheet }, 'طباعة كشف الحساب'),
+    h('button', { class: 'btn ghost spaced', onClick: async () => { if (await needActive()) printSheet(); } }, 'طباعة كشف الحساب'),
     h('div', { class: 'btn-row' },
       h('button', { class: 'btn ghost', onClick: async () => {
+        if (!(await needActive())) return;
         const v = await customerForm(customer, await listCustomerNames());
         if (!v) return;
         await saveCustomer({ ...v, id });
         toast('تم الحفظ'); reload();
       } }, 'تعديل الزبون'),
       h('button', { class: 'btn ghost', onClick: async () => {
+        if (!(await needActive())) return;
         if (await customerDebtCount(id)) { await messageDialog('لا يمكن حذف زبون لديه ديون مسجَّلة.'); return; }
         if (await confirmDialog('حذف الزبون «' + customer.name + '» نهائيًا؟', 'حذف', true)) {
           await deleteCustomer(id);

@@ -1,3 +1,5 @@
+import { requireActive } from './license.js';
+
 // جسر الواجهة ↔ الغلاف الأصلي. الدوال التي تحتاج أندرويد تُرفض بخطأ 'no-bridge' خارج التطبيق.
 
 let pendingScan = null;
@@ -30,6 +32,7 @@ export function hasPrint() {
 
 /** يفتح حوار الطباعة الأصلي لصفحة HTML كاملة. */
 export function printHtml(html) {
+  requireActive(); // الطباعة متاحة للاشتراك الفعّال فقط
   if (!hasPrint()) throw new Error('no-bridge');
   window.Android.printHtml(html);
 }
@@ -56,4 +59,14 @@ export function saveFile(name, mime, text) {
     pendingSave = resolve;
     window.Android.saveFile(name, mime, text);
   });
+}
+
+export function hasShare() {
+  return !!(window.Android && typeof window.Android.shareText === 'function');
+}
+
+/** يفتح قائمة المشاركة الأصلية (واتساب، رسائل...) بنص معيّن. */
+export function shareText(text) {
+  if (!hasShare()) throw new Error('no-bridge');
+  window.Android.shareText(text);
 }

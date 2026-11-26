@@ -6,11 +6,13 @@ import { renderPayment } from './ui/payment.js';
 import { renderNewDebt } from './ui/debt.js';
 import { renderProducts } from "./ui/product.js";
 import { renderSettings } from './ui/settings.js';
+import { refreshLicense } from './license.js';
 
 const view = document.getElementById('view');
 const nav = document.getElementById('nav');
 
 function route() {
+  refreshLicense().catch(() => {}); // يحدّث «آخر زمن رُئي» (منع الغش بتأخير ساعة الهاتف)
   const hash = location.hash || '#/';
   const m = hash.match(/^#\/customer\/(\d+)$/);
   let active = 'home';
@@ -41,6 +43,7 @@ function route() {
 async function start() {
   try {
     await openDB();
+    await refreshLicense();
     window.addEventListener('hashchange', route);
     await route();
   } catch (e) {

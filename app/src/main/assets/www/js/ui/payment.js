@@ -5,8 +5,10 @@ import { applyPayment } from '../payments.js';
 import { allocatePayment } from '../allocation.js';
 import { parseDinars, formatMillimes, toInputString } from '../money.js';
 import { formatDate } from '../dates.js';
+import { needActive, licenseActive } from './licensecard.js';
 
 export async function renderPayment(root, customerId) {
+  if (!licenseActive()) { await needActive(); history.back(); return; }
   const customer = await getCustomer(customerId);
   if (!customer) { location.hash = '#/'; return; }
   const { debts } = await loadCustomerData(customerId);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildBackup, validateBackup, STORES, backupFileName, daysSince } from '../app/src/main/assets/www/js/backup.js';
+import { buildBackup, validateBackup, STORES, backupFileName, daysSince, stripLicense } from '../app/src/main/assets/www/js/backup.js';
 
 const good = () => buildBackup({
   customers: [{ id: 1, name: 'أحمد', nameNorm: 'احمد' }, { id: 2, name: 'سالم' }],
@@ -60,4 +60,8 @@ assert.equal(daysSince(null), null);
 assert.equal(daysSince(1000, 1000 + 86400000 * 3 + 5), 3);
 assert.equal(daysSince(5000, 5000), 0);
 
+// حالة الترخيص لا تدخل النسخ الاحتياطي
+assert.deepEqual(stripLicense([{ key: 'shopName', value: 'أ' }, { key: 'lic_state', value: { nonce: 'x' } }, { key: 'lastBackupAt', value: 1 }]),
+  [{ key: 'shopName', value: 'أ' }, { key: 'lastBackupAt', value: 1 }]);
+assert.deepEqual(stripLicense(undefined), []);
 console.log('backup tests OK');

@@ -10,12 +10,15 @@ android {
         applicationId 'com.ryan.dettes'
         minSdk 24
         targetSdk 34
-        versionCode 6
-        versionName '0.6.0'
+        versionCode 7
+        versionName '0.7.0'
     }
 
     // مفتاح تصحيح ثابت داخل المستودع (ليس سرًّا) حتى تتطابق توقيعات كل البنايات
     // ويُثبَّت كل APK جديد فوق القديم دون فقدان البيانات.
+    // توقيع release يتفعّل فقط حين تُمرَّر أسراره من GitHub Secrets (KS_FILE, KS_PASS, KS_ALIAS, KS_KEYPASS).
+    def ksFile = System.getenv('KS_FILE')
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -23,11 +26,20 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (ksFile) {
+            release {
+                storeFile file(ksFile)
+                storePassword System.getenv('KS_PASS')
+                keyAlias System.getenv('KS_ALIAS')
+                keyPassword System.getenv('KS_KEYPASS')
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig ksFile ? signingConfigs.release : signingConfigs.debug
         }
     }
 

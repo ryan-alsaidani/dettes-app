@@ -3,6 +3,7 @@ import { getSetting, setSetting } from '../settings.js';
 import { exportAll, importAll, validateBackup, backupFileName, daysSince } from '../backup.js';
 import { hasSave, saveFile } from '../bridge.js';
 import { formatDate, todayISO } from '../dates.js';
+import { needActive, licenseCard } from './licensecard.js';
 
 function lastBackupText(ts) {
   const d = daysSince(ts);
@@ -69,6 +70,7 @@ export async function renderSettings(root) {
 
   root.replaceChildren(
     h('h1', { class: 'title' }, 'الإعدادات'),
+    licenseCard(),
     h('div', { class: 'card' },
       h('h2', { class: 'sheet-title' }, 'بيانات المكتبة'),
       h('p', { class: 'dim small' }, 'تظهر في ترويسة كشف الحساب والفاتورة المطبوعة.'),
@@ -84,6 +86,6 @@ export async function renderSettings(root) {
       h('p', { class: 'dim small' }, 'بيانات التطبيق محفوظة داخل الهاتف فقط. مسح بيانات التطبيق أو حذفه يمسح كل شيء، فاحفظ نسخة بانتظام في مكان آمن (التنزيلات أو Drive أو أرسلها لنفسك).'),
       lastTxt,
       h('button', { class: 'btn', onClick: doExport }, 'حفظ نسخة احتياطية'),
-      h('button', { class: 'btn ghost', onClick: () => fileInput.click() }, 'استرجاع من نسخة'),
+      h('button', { class: 'btn ghost', onClick: async () => { if (await needActive()) fileInput.click(); } }, 'استرجاع من نسخة'),
       fileInput));
 }

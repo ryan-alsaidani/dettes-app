@@ -111,6 +111,14 @@ public class MainActivity extends Activity {
         integrator.initiateScan();
     }
 
+    /** قائمة المشاركة الأصلية (واتساب، رسائل...) لنص معيّن، مثل رمز الجهاز. */
+    public void shareText(String text) {
+        Intent intent = new Intent(Intent.ACTION_SEND);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_TEXT, text);
+        startActivity(Intent.createChooser(intent, "إرسال رمز الجهاز"));
+    }
+
     /** يفتح «حفظ ملف» الأصلي. النتيجة تصل إلى window.__onSaved(ok, message). */
     public void startSave(String name, String mime, String text) {
         pendingSaveText = text;

@@ -1,10 +1,14 @@
 import * as db from './db.js';
 import { normalize } from './search.js';
 import { formatMillimes, toInputString } from './money.js';
+import { requireActive } from './license.js';
 
 export const listProducts = () => db.getAll('products');
 export const getProduct = (id) => db.get('products', id);
-export const deleteProduct = (id) => db.del('products', id);
+export function deleteProduct(id) {
+  requireActive();
+  return db.del('products', id);
+}
 
 export async function listBrands() {
   const brands = await db.getAll('brands');
@@ -20,6 +24,7 @@ export async function findByBarcode(code) {
 
 /** price بالمليم (عدد صحيح). يرمي Error برسالة عربية عند خطأ في المدخلات. */
 export async function saveProduct({ id, name, barcode, brand, price, weight, description }) {
+  requireActive();
   const clean = String(name ?? '').trim();
   if (!clean) throw new Error('الاسم مطلوب');
   if (!Number.isInteger(price) || price < 0) throw new Error('السعر غير صالح');

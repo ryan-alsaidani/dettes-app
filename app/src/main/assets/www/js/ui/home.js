@@ -4,6 +4,7 @@ import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
 import { getSetting, setSetting } from '../settings.js';
 import { daysSince } from '../backup.js';
+import { needActive, licenseCard } from './licensecard.js';
 
 export async function renderHome(root) {
   let all = await listCustomersWithTotals();
@@ -53,6 +54,7 @@ export async function renderHome(root) {
   search.addEventListener('input', draw);
 
   const addBtn = h('button', { class: 'btn', onClick: async () => {
+    if (!(await needActive())) return;
     const v = await customerForm({}, all);
     if (!v) return;
     await saveCustomer(v);
@@ -64,6 +66,7 @@ export async function renderHome(root) {
 
   root.replaceChildren(
     h('h1', { class: 'title' }, 'الزبائن'),
+    licenseCard(),
     reminder,
     search, addBtn, count, list);
   draw();

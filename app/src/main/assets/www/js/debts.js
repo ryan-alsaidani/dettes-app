@@ -1,6 +1,7 @@
 import * as db from './db.js';
 import { openDB } from './db.js';
 import { todayISO } from './dates.js';
+import { requireActive } from './license.js';
 
 function validateLine(it) {
   if (!String(it.nameSnapshot ?? '').trim()) throw new Error('اسم البند مطلوب');
@@ -47,6 +48,7 @@ export async function loadCustomerData(customerId) {
 
 /** «تم دفع الثمن»: يسدّد ما بقي من الدين ويسجّل دفعة (ليظهر في السجل ويمكن التراجع عنها لاحقًا). */
 export async function markPaid(debtId) {
+  requireActive();
   const dbx = await openDB();
   return new Promise((resolve, reject) => {
     const tx = dbx.transaction(['debts', 'payments'], 'readwrite');
@@ -70,6 +72,7 @@ export async function markPaid(debtId) {
 }
 
 export async function updateDebt(id, { name, unitPrice, qty }) {
+  requireActive();
   const d = await db.get('debts', id);
   if (!d) throw new Error('الدين غير موجود');
   validateLine({ nameSnapshot: name, unitPrice, qty });
@@ -79,6 +82,7 @@ export async function updateDebt(id, { name, unitPrice, qty }) {
 }
 
 export async function deleteDebt(id) {
+  requireActive();
   const d = await db.get('debts', id);
   if (!d) return;
   await db.del('debts', id);

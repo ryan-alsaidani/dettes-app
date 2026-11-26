@@ -13,7 +13,7 @@ public class Bridge {
 
     @JavascriptInterface
     public String version() {
-        return "0.6.0";
+        return "0.7.0";
     }
 
     /** يفتح ماسح الباركود. النتيجة تصل لاحقًا إلى window.__onBarcode(text|null). */
@@ -45,6 +45,17 @@ public class Bridge {
             @Override
             public void run() {
                 activity.startSave(name, mime, text);
+            }
+        });
+    }
+
+    /** يفتح قائمة المشاركة لنص (رمز الجهاز للتجديد). */
+    @JavascriptInterface
+    public void shareText(final String text) {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                activity.shareText(text);
             }
         });
     }
