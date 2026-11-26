@@ -1,5 +1,6 @@
 import { h, toast, customerForm, fill } from './dom.js';
 import { listCustomersWithTotals, saveCustomer } from '../customers.js';
+import { getGlobalStats } from '../debts.js';
 import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
 import { getSetting, setSetting } from '../settings.js';
@@ -8,6 +9,7 @@ import { needActive, licenseCard } from './licensecard.js';
 
 export async function renderHome(root) {
   let all = await listCustomersWithTotals();
+  const stats = await getGlobalStats();
   const lastBackup = await getSetting('lastBackupAt', 0);
   const snoozeUntil = await getSetting('backupSnoozeUntil', 0);
   const staleDays = daysSince(lastBackup);
@@ -23,6 +25,15 @@ export async function renderHome(root) {
         await setSetting('backupSnoozeUntil', Date.now() + 86400000);
         reminder.remove();
       } }, 'لاحقًا'))) : null;
+  const tile = (label, value, cls, wide) => h('div', { class: 'tile' + (wide ? ' wide' : '') },
+    h('div', { class: 'tile-lbl' }, label),
+    h('div', { class: 'tile-val' + (cls ? ' ' + cls : '') }, formatMillimes(value)));
+  const statsCard = all.length ? h('div', { class: 'card' },
+    h('h2', { class: 'stats-title' }, 'المعاملات المتأتية من توفير خدمة الدفع المؤجل'),
+    h('div', { class: 'stats-grid' },
+      tile('إجمالي ما تم تسديده', stats.paid, 'ok'),
+      tile('إجمالي غير المسدَّد', stats.remaining, 'warn'),
+      tile('مجموع المسدَّد مع غير المسدَّد', stats.total, '', true))) : null;
   const list = h('div', { class: 'list' });
   const count = h('p', { class: 'dim small' });
   const search = h('input', { class: 'input', type: 'search',
@@ -69,6 +80,7 @@ export async function renderHome(root) {
     licenseCard(),
     reminder,
     h('button', { class: 'btn cartbtn', onClick: () => { location.hash = '#/cart'; } }, '🛒 سلة جديدة (مسح المنتجات)'),
+    statsCard,
     search, addBtn, count, list);
   draw();
 }

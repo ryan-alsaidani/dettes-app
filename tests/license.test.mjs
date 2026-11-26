@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { b32encode, b32decode, encodeDeviceCode, parseDeviceCode, extractCode, crc8, licensePayload, parseLicense, toHex, fromHex } from '../app/src/main/assets/www/js/license-codec.js';
-import { checkKey, statusFromState, DAY_MS, isLicenseRecord, LicenseError } from '../app/src/main/assets/www/js/license.js';
+import { checkKey, statusFromState, DAY_MS, isLicenseRecord, LicenseError, formatRemaining } from '../app/src/main/assets/www/js/license.js';
 import { signLicense } from '../tools/license-sign.js';
 
 const subtle = globalThis.crypto.subtle;
@@ -141,5 +141,13 @@ await assert.rejects(signLicense(PRIV, 'رمز غير صالح', 30));
 assert.equal(isLicenseRecord({ key: 'lic_state', value: {} }), true);
 assert.equal(isLicenseRecord({ key: 'shopName' }), false);
 assert.equal(isLicenseRecord(null), false);
+
+// تنسيق المدة المتبقية
+assert.deepEqual(formatRemaining(1), { num: '1', unit: 'يوم متبقٍ' });
+assert.deepEqual(formatRemaining(5), { num: '5', unit: 'أيام متبقية' });
+assert.deepEqual(formatRemaining(365), { num: '365', unit: 'أيام متبقية' });
+assert.deepEqual(formatRemaining(730), { num: '2', unit: 'سنة متبقية' });
+assert.deepEqual(formatRemaining(36524), { num: '100', unit: 'سنة متبقية' });
+assert.deepEqual(formatRemaining(548), { num: '1.5', unit: 'سنة متبقية' });
 
 console.log('license tests OK');

@@ -25,6 +25,15 @@ const keyError = (code) => new LicenseError(code, KEY_MESSAGES[code]);
 
 export const newNonceHex = () => toHex(globalThis.crypto.getRandomValues(new Uint8Array(NONCE_BYTES)));
 
+/** المدة المتبقية للعرض: أيام حتى سنة، وما فوقها بالسنوات (مثل 100 سنة). */
+export function formatRemaining(daysLeft) {
+  if (daysLeft > 365) {
+    const years = Math.round((daysLeft / 365.25) * 10) / 10;
+    return { num: String(years).replace(/\.0$/, ''), unit: 'سنة متبقية' };
+  }
+  return { num: String(daysLeft), unit: daysLeft === 1 ? 'يوم متبقٍ' : 'أيام متبقية' };
+}
+
 /** حالة نقية من الحالة المخزَّنة. الزمن لا يرجع للوراء: now الفعلي = الأكبر بين الآن وآخر زمن رُئي. */
 export function statusFromState(state, now = Date.now()) {
   const eff = Math.max(now, state.lastSeen || 0);

@@ -13,7 +13,7 @@ public class Bridge {
 
     @JavascriptInterface
     public String version() {
-        return "0.8.0";
+        return "0.9.0";
     }
 
     /** يفتح ماسح الباركود. النتيجة تصل لاحقًا إلى window.__onBarcode(text|null). */
@@ -97,6 +97,17 @@ public class Bridge {
             @Override
             public void run() {
                 activity.scanResetLast();
+            }
+        });
+    }
+
+    /** لون شريطي الحالة والتنقل بحسب مظهر التطبيق. */
+    @JavascriptInterface
+    public void setBarColors(final String hex, final boolean darkIcons) {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                activity.setBarColors(hex, darkIcons);
             }
         });
     }

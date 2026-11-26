@@ -2,6 +2,7 @@ import { h, toast, confirmDialog, messageDialog, fill } from './dom.js';
 import { getSetting, setSetting } from '../settings.js';
 import { exportAll, importAll, validateBackup, backupFileName, daysSince } from '../backup.js';
 import { hasSave, saveFile } from '../bridge.js';
+import { THEMES, getTheme, setTheme } from '../theme.js';
 import { formatDate, todayISO } from '../dates.js';
 import { needActive, licenseCard } from './licensecard.js';
 
@@ -16,6 +17,14 @@ export async function renderSettings(root) {
   const name = h('input', { class: 'input', placeholder: 'مثال: مكتبة النور', value: await getSetting('shopName', '') });
   const phone = h('input', { class: 'input', inputmode: 'tel', placeholder: 'اختياري', value: await getSetting('shopPhone', '') });
   const lastTxt = h('p', { class: 'dim' }, lastBackupText(await getSetting('lastBackupAt', 0)));
+
+  const themeBox = h('div', { class: 'chips seg' });
+  function drawThemes() {
+    const cur = getTheme();
+    themeBox.replaceChildren(...THEMES.map(([key, label]) =>
+      h('button', { class: 'chip' + (key === cur ? ' on' : ''), type: 'button', onClick: () => { setTheme(key); drawThemes(); } }, label)));
+  }
+  drawThemes();
 
   async function doExport() {
     if (!hasSave()) { await messageDialog('الحفظ متاح داخل التطبيق فقط.'); return; }
@@ -71,6 +80,10 @@ export async function renderSettings(root) {
   fill(root, 
     h('h1', { class: 'title' }, 'الإعدادات'),
     licenseCard(),
+    h('div', { class: 'card' },
+      h('h2', { class: 'sheet-title' }, 'المظهر'),
+      h('p', { class: 'dim small' }, 'داكن، أو فاتح، أو متباين (خلفية داكنة وحواف فاتحة لوضوح أعلى).'),
+      themeBox),
     h('div', { class: 'card' },
       h('h2', { class: 'sheet-title' }, 'بيانات المكتبة'),
       h('p', { class: 'dim small' }, 'تظهر في ترويسة كشف الحساب والفاتورة المطبوعة.'),

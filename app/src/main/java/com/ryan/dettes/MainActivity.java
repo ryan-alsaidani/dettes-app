@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -62,6 +63,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private WebView printWebView; // يبقى مرجعه حيًّا حتى تنتهي الطباعة
     private WebViewAssetLoader assetLoader;
+    private LinearLayout rootLayout;
 
     // الماسح الحيّ (السلة السريعة): شريط كاميرا فوق الصفحة يبقى مفتوحًا بين الباركودات
     private DecoratedBarcodeView scanView;
@@ -83,6 +85,7 @@ public class MainActivity extends Activity {
         webView.setBackgroundColor(bg);
 
         LinearLayout root = new LinearLayout(this);
+        rootLayout = root;
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(bg);
         scanView = new DecoratedBarcodeView(this);
@@ -244,6 +247,26 @@ public class MainActivity extends Activity {
         });
         printWebView = pv;
         pv.loadDataWithBaseURL(BASE_URL, html, "text/html", "utf-8", null);
+    }
+
+    /** يغيّر لون شريطي الحالة والتنقل وخلفية الصفحة بحسب المظهر (فاتح/داكن). */
+    public void setBarColors(String hex, boolean darkIcons) {
+        int c;
+        try {
+            c = Color.parseColor(hex);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        getWindow().setStatusBarColor(c);
+        getWindow().setNavigationBarColor(c);
+        getWindow().getDecorView().setBackgroundColor(c);
+        if (rootLayout != null) rootLayout.setBackgroundColor(c);
+        if (webView != null) webView.setBackgroundColor(c);
+        View decor = getWindow().getDecorView();
+        int flags = decor.getSystemUiVisibility();
+        int mask = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if (Build.VERSION.SDK_INT >= 26) mask |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        decor.setSystemUiVisibility(darkIcons ? (flags | mask) : (flags & ~mask));
     }
 
     // ---------- الماسح الحيّ ----------

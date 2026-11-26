@@ -1,7 +1,7 @@
 import * as db from './db.js';
 import { openDB } from './db.js';
 import { todayISO } from './dates.js';
-import { distributePaid } from './debtlogic.js';
+import { distributePaid, summarize } from './debtlogic.js';
 import { requireActive } from './license.js';
 
 function validateLine(it) {
@@ -62,6 +62,11 @@ export async function createOrder({ customerId, date, note, items, paidNow = 0 }
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });
+}
+
+/** مجاميع كل الديون: {total, paid, remaining, open}. */
+export async function getGlobalStats() {
+  return summarize(await db.getAll('debts'));
 }
 
 export async function loadCustomerData(customerId) {

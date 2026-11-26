@@ -9,6 +9,7 @@ import { renderNewDebt } from './ui/debt.js';
 import { renderProducts } from "./ui/product.js";
 import { renderSettings } from './ui/settings.js';
 import { refreshLicense } from './license.js';
+import { getTheme, applyTheme } from './theme.js';
 
 const view = document.getElementById('view');
 const nav = document.getElementById('nav');
@@ -46,6 +47,8 @@ function route() {
 
   nav.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.tab === active));
 }
+
+applyTheme(getTheme()); // يزامن شريطي أندرويد مع المظهر المحفوظ
 
 async function start() {
   try {

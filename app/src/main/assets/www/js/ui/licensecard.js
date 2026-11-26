@@ -1,5 +1,5 @@
 import { h, toast, sheet } from './dom.js';
-import { licenseStatus, getDeviceCode, applyKey, EXPIRED_MESSAGE, LicenseError } from '../license.js';
+import { licenseStatus, getDeviceCode, applyKey, EXPIRED_MESSAGE, LicenseError, formatRemaining } from '../license.js';
 import { hasShare, shareText } from '../bridge.js';
 import { formatDate, todayISO } from '../dates.js';
 
@@ -79,7 +79,7 @@ export function licenseCard() {
         h('div', { class: 'lic-title' }, title),
         h('div', { class: 'dim small' }, sub)),
       st.active ? h('div', { class: 'lic-days' },
-        h('span', { class: 'lic-num' }, String(st.daysLeft)),
-        h('span', { class: 'dim small' }, st.daysLeft === 1 ? 'يوم متبقٍ' : 'أيام متبقية')) : null),
+        h('span', { class: 'lic-num' }, formatRemaining(st.daysLeft).num),
+        h('span', { class: 'dim small' }, formatRemaining(st.daysLeft).unit)) : null),
     h('button', { class: 'btn lic-btn', onClick: () => openRenew() }, 'التجديد'));
 }
