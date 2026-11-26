@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { statusOf, summarize, filterByStatus, sortDebts, groupByOrder, debtHaystack } from '../app/src/main/assets/www/js/debtlogic.js';
+import { statusOf, summarize, filterByStatus, sortDebts, groupByOrder, debtHaystack, distributePaid } from '../app/src/main/assets/www/js/debtlogic.js';
 import { todayISO, formatDate } from '../app/src/main/assets/www/js/dates.js';
 import { productHaystack } from '../app/src/main/assets/www/js/products.js';
 import { normalize, matches } from '../app/src/main/assets/www/js/search.js';
@@ -90,5 +90,30 @@ assert.equal(todayISO(new Date(2026, 10, 5)), '2026-11-05');
 assert.equal(formatDate('2026-11-05'), '05/11/2026');
 assert.equal(formatDate(''), '');
 assert.equal(formatDate(null), '');
+
+// توزيع ما يُدفع الآن على بنود السلة
+{
+  const items = [{ unitPrice: 1000, qty: 1 }, { unitPrice: 1500, qty: 2 }]; // 1000 و3000
+  assert.deepEqual(distributePaid(items, 0), { total: 4000, applied: 0, change: 0, pays: [0, 0] });
+  assert.deepEqual(distributePaid(items, 4000), { total: 4000, applied: 4000, change: 0, pays: [1000, 3000] });   // دفع كامل
+  assert.deepEqual(distributePaid(items, 5000), { total: 4000, applied: 4000, change: 1000, pays: [1000, 3000] }); // الباقي للزبون
+  assert.deepEqual(distributePaid(items, 3000), { total: 4000, applied: 3000, change: 0, pays: [0, 3000] });      // تركيبة مطابقة
+  const part = distributePaid(items, 2000);                                                                        // لا مطابقة: كامل + جزئي
+  assert.equal(part.applied, 2000);
+  assert.equal(part.pays.reduce((a, b) => a + b, 0), 2000);
+  assert.ok(part.pays[0] <= 1000 && part.pays[1] <= 3000);
+  assert.deepEqual(distributePaid(items, -5).pays, [0, 0]);
+  // عشوائيًا: المجموع المطبَّق = المدفوع (أو المجموع)، ولا بند يتجاوز ثمنه
+  let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let k = 0; k < 300; k++) {
+    const its = Array.from({ length: 1 + Math.floor(rnd() * 8) }, () => ({ unitPrice: (1 + Math.floor(rnd() * 20)) * 250, qty: 1 + Math.floor(rnd() * 3) }));
+    const total = its.reduce((a, i) => a + i.unitPrice * i.qty, 0);
+    const paid = Math.floor(rnd() * (total + 3000));
+    const r = distributePaid(its, paid);
+    assert.equal(r.applied + r.change, paid);
+    assert.equal(r.pays.reduce((a, b) => a + b, 0), r.applied);
+    r.pays.forEach((p, i) => assert.ok(p >= 0 && p <= its[i].unitPrice * its[i].qty));
+  }
+}
 
 console.log('debts tests OK');

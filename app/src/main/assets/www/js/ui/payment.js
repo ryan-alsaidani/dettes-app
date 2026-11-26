@@ -1,4 +1,4 @@
-import { h, toast, messageDialog } from './dom.js';
+import { h, toast, messageDialog, fill } from './dom.js';
 import { getCustomer } from '../customers.js';
 import { loadCustomerData } from '../debts.js';
 import { applyPayment } from '../payments.js';
@@ -23,7 +23,7 @@ export async function renderPayment(root, customerId) {
   ];
 
   if (!open.length) {
-    root.replaceChildren(...header, h('div', { class: 'card empty' }, 'لا ديون مفتوحة على هذا الزبون.'));
+    fill(root, ...header, h('div', { class: 'card empty' }, 'لا ديون مفتوحة على هذا الزبون.'));
     return;
   }
 
@@ -103,7 +103,7 @@ export async function renderPayment(root, customerId) {
     history.back();
   });
 
-  root.replaceChildren(
+  fill(root, 
     ...header,
     h('div', { class: 'card alt' },
       h('div', { class: 'dim' }, 'المتبقي على الزبون'),

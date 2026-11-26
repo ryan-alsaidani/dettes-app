@@ -135,3 +135,13 @@ a { color: inherit; text-decoration: none; }
 .lic-num { display: block; font-size: 36px; font-weight: 700; line-height: 1.1; }
 .lic-btn { margin: 14px 0 0; padding: 13px; font-size: 16px; }
 .codebox { direction: ltr; text-align: left; background: var(--card-2); border-radius: var(--radius-sm); padding: 14px; font-family: monospace; font-size: 14px; line-height: 1.7; word-break: break-all; user-select: all; margin-bottom: var(--gap); }
+
+/* ===== السلة السريعة ===== */
+.cartbtn { font-size: 19px; padding: 19px; }
+.btn.mini { padding: 11px; font-size: 15px; margin: 8px 0 0; }
+.last-added { background: var(--card-2); border-radius: var(--radius-sm); padding: 10px 14px; margin: 6px 0 var(--gap); font-weight: 600; }
+.unk { border: 2px dashed var(--warn); }
+.codeln { direction: ltr; text-align: left; font-family: monospace; word-break: break-all; }
+.section { font-size: 18px; margin: 18px 4px 10px; }
+.pay-line.total { font-weight: 700; font-size: 18px; border-top: 2px solid var(--accent); margin-top: 6px; padding-top: 12px; }
+.spaced-top { margin-top: 12px; }

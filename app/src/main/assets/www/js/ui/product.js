@@ -1,4 +1,4 @@
-import { h, toast, confirmDialog, sheet } from './dom.js';
+import { h, toast, confirmDialog, sheet, fill } from './dom.js';
 import * as P from '../products.js';
 import { matches, suggestBrands } from '../search.js';
 import { formatMillimes, parseDinars, toInputString } from '../money.js';
@@ -165,7 +165,7 @@ export async function renderProducts(root) {
     openForm(found || { barcode: code });
   } }, 'مسح باركود');
 
-  root.replaceChildren(
+  fill(root, 
     h('h1', { class: 'title' }, 'المنتجات'),
     licenseActive() ? null : licenseCard(),
     search,

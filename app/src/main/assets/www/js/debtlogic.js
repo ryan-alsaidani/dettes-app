@@ -2,6 +2,7 @@
 import { normalize } from './search.js';
 import { formatDate } from './dates.js';
 import { toInputString } from './money.js';
+import { allocatePayment } from './allocation.js';
 
 export const STATUS_LABEL = { unpaid: 'غير مسدَّد', partial: 'مسدَّد جزئيًا', paid: 'مسدَّد' };
 
@@ -82,4 +83,21 @@ export function debtHaystack(d, order) {
     toInputString(d.unitPrice),
     toInputString(totalOf(d)),
   ].filter(Boolean).join(' '));
+}
+
+/**
+ * يوزّع مبلغًا مدفوعًا الآن على بنود سلة جديدة (بالخوارزمية الذكية نفسها: تركيبة مطابقة أولًا ثم جزئي).
+ * items: [{unitPrice, qty}]  paidNow: مليم. يعيد {total, applied, change, pays[]} (pays بنفس ترتيب البنود).
+ */
+export function distributePaid(items, paidNow) {
+  const lineTotals = items.map(it => it.unitPrice * it.qty);
+  const total = lineTotals.reduce((a, b) => a + b, 0);
+  const given = Math.max(0, paidNow || 0);
+  const applied = Math.min(given, total);
+  const pays = items.map(() => 0);
+  if (applied > 0) {
+    const res = allocatePayment(lineTotals.map((t, i) => ({ id: i + 1, remaining: t, date: '0' })), applied);
+    for (const it of res.options[0].items) pays[it.debtId - 1] = it.pay;
+  }
+  return { total, applied, change: given - applied, pays };
 }

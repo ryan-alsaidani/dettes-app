@@ -13,7 +13,7 @@ public class Bridge {
 
     @JavascriptInterface
     public String version() {
-        return "0.7.0";
+        return "0.8.0";
     }
 
     /** يفتح ماسح الباركود. النتيجة تصل لاحقًا إلى window.__onBarcode(text|null). */
@@ -56,6 +56,47 @@ public class Bridge {
             @Override
             public void run() {
                 activity.shareText(text);
+            }
+        });
+    }
+
+    /** الماسح الحيّ: شريط كاميرا يبقى مفتوحًا ويرسل كل باركود جديد إلى window.__onScanCode. */
+    @JavascriptInterface
+    public void scanStart() {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                activity.scanStart();
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void scanStop() {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                activity.scanStop();
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void scanTorch(final boolean on) {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                activity.scanTorch(on);
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public void scanResetLast() {
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                activity.scanResetLast();
             }
         });
     }

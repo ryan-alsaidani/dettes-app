@@ -18,11 +18,19 @@ export function h(tag, props = {}, ...children) {
   return el;
 }
 
+/**
+ * مثل el.replaceChildren(...) لكن يتجاهل null/undefined/false (المتصفح يحوّل null إلى النص «null»).
+ */
+export function fill(el, ...children) {
+  el.replaceChildren(...children.flat(Infinity).filter(c => c !== null && c !== undefined && c !== false));
+}
+
 export function field(label, input) {
   return h('div', { class: 'field' }, h('label', { class: 'lbl' }, label), input);
 }
 
 export function toast(msg) {
+  document.querySelectorAll('.toast').forEach(el => el.remove());
   const t = h('div', { class: 'toast' }, msg);
   document.body.append(t);
   setTimeout(() => t.remove(), 2200);

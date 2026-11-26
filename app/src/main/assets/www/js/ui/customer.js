@@ -1,4 +1,4 @@
-import { h, toast, confirmDialog, messageDialog, customerForm, itemForm, sheet } from './dom.js';
+import { h, toast, confirmDialog, messageDialog, customerForm, itemForm, sheet, fill } from './dom.js';
 import { getCustomer, saveCustomer, deleteCustomer, customerDebtCount, listCustomerNames } from '../customers.js';
 import { loadCustomerData, markPaid, updateDebt, deleteDebt } from '../debts.js';
 import { getLastPayment, undoPayment, listPayments } from '../payments.js';
@@ -110,7 +110,7 @@ export async function renderCustomer(root, id) {
   }
 
   function drawControls() {
-    controls.replaceChildren(
+    fill(controls, 
       segmented(FILTERS, view.filter, k => { view.filter = k; drawControls(); drawList(); }),
       segmented(SORTS, view.sort, k => { view.sort = k; drawControls(); drawList(); }),
       segmented(VIEWS, view.mode, k => { view.mode = k; drawControls(); drawList(); }));
@@ -146,7 +146,7 @@ export async function renderCustomer(root, id) {
 
   search.addEventListener('input', drawList);
 
-  root.replaceChildren(
+  fill(root, 
     h('button', { class: 'back', onClick: () => history.back() }, '→ رجوع'),
     h('h1', { class: 'title' }, customer.name),
     licenseActive() ? null : licenseCard(),

@@ -1,6 +1,7 @@
 import * as db from './db.js';
 import { openDB } from './db.js';
 import { todayISO } from './dates.js';
+import { distributePaid } from './debtlogic.js';
 import { requireActive } from './license.js';
 
 function validateLine(it) {
@@ -9,30 +10,55 @@ function validateLine(it) {
   if (!Number.isInteger(it.qty) || it.qty < 1) throw new Error('الكمية غير صالحة');
 }
 
-/** يسجّل «زيارة/فاتورة» وبنودها في معاملة واحدة (إما الكل أو لا شيء). */
-export async function createOrder({ customerId, date, note, items }) {
+/**
+ * يسجّل «زيارة/فاتورة» وبنودها (وما دُفع منها الآن إن وُجد) في معاملة واحدة: إما الكل أو لا شيء.
+ * paidNow: مبلغ دفعه الزبون الآن بالمليم (قد يزيد عن المجموع فيُسجَّل الباقي للزبون).
+ * يعيد { orderId, debtIds, paymentId }.
+ */
+export async function createOrder({ customerId, date, note, items, paidNow = 0 }) {
   if (!items || !items.length) throw new Error('أضف بندًا واحدًا على الأقل');
   items.forEach(validateLine);
+  if (!Number.isInteger(paidNow) || paidNow < 0) throw new Error('المبلغ المدفوع غير صالح');
+  if (paidNow > 0) requireActive(); // التسديد يحتاج اشتراكًا فعّالًا، أما تسجيل الدين فمتاح دائمًا
+  const { applied, change, pays } = distributePaid(items, paidNow);
+
   const dbx = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = dbx.transaction(['orders', 'debts'], 'readwrite');
+    const tx = dbx.transaction(['orders', 'debts', 'payments'], 'readwrite');
     const orders = tx.objectStore('orders');
     const debts = tx.objectStore('debts');
+    const payments = tx.objectStore('payments');
+    let orderId = null;
+    let paymentId = null;
+    const debtIds = [];
+
     const req = orders.add({ customerId, date, note: String(note ?? '').trim() || null, createdAt: Date.now() });
     req.onsuccess = () => {
-      const orderId = req.result;
-      for (const it of items) {
-        debts.add({
+      orderId = req.result;
+      let pending = items.length;
+      items.forEach((it, i) => {
+        const total = it.unitPrice * it.qty;
+        const r = debts.add({
           orderId, customerId,
           productId: it.productId || null,
           nameSnapshot: String(it.nameSnapshot).trim(),
           unitPrice: it.unitPrice, qty: it.qty,
-          date, paid: 0, remaining: it.unitPrice * it.qty,
+          date, paid: pays[i], remaining: total - pays[i],
           createdAt: Date.now(),
         });
-      }
+        r.onsuccess = () => {
+          debtIds[i] = r.result;
+          if (--pending === 0 && applied > 0) {
+            const pr = payments.add({
+              customerId, amount: applied, change, date, createdAt: Date.now(),
+              allocations: debtIds.map((id, k) => ({ debtId: id, amount: pays[k] })).filter(a => a.amount > 0),
+            });
+            pr.onsuccess = () => { paymentId = pr.result; };
+          }
+        };
+      });
     };
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => resolve({ orderId, debtIds, paymentId });
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });

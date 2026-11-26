@@ -1,7 +1,9 @@
 import { openDB } from './db.js';
-import { h } from './ui/dom.js';
+import { h, fill } from './ui/dom.js';
 import { renderHome } from './ui/home.js';
 import { renderCustomer } from './ui/customer.js';
+import { renderCart } from './ui/cart.js';
+import { liveScanStop } from './bridge.js';
 import { renderPayment } from './ui/payment.js';
 import { renderNewDebt } from './ui/debt.js';
 import { renderProducts } from "./ui/product.js";
@@ -12,6 +14,7 @@ const view = document.getElementById('view');
 const nav = document.getElementById('nav');
 
 function route() {
+  if (!(location.hash || '#/').startsWith('#/cart')) liveScanStop(); // الكاميرا تعمل في السلة فقط
   refreshLicense().catch(() => {}); // يحدّث «آخر زمن رُئي» (منع الغش بتأخير ساعة الهاتف)
   const hash = location.hash || '#/';
   const m = hash.match(/^#\/customer\/(\d+)$/);
@@ -27,6 +30,10 @@ function route() {
   if (pm) {
     nav.hidden = true;
     return renderPayment(view, Number(pm[1]));
+  }
+  if (hash === '#/cart') {
+    nav.hidden = true;
+    return renderCart(view);
   }
   const dm = hash.match(/^#\/debt\/(\d+)$/);
   if (dm) {
@@ -47,7 +54,7 @@ async function start() {
     window.addEventListener('hashchange', route);
     await route();
   } catch (e) {
-    view.replaceChildren(h('div', { class: 'card empty' }, 'تعذّر فتح قاعدة البيانات: ' + (e && e.message || e)));
+    fill(view, h('div', { class: 'card empty' }, 'تعذّر فتح قاعدة البيانات: ' + (e && e.message || e)));
   }
 }
 start();

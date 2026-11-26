@@ -1,10 +1,14 @@
 package com.ryan.dettes;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -12,6 +16,8 @@ import android.os.Looper;
 import android.print.PrintAttributes;
 import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
+import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -19,16 +25,26 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.LinearLayout;
 
 import androidx.webkit.WebViewAssetLoader;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.ResultPoint;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
+
+import com.journeyapps.barcodescanner.BarcodeCallback;
+import com.journeyapps.barcodescanner.BarcodeResult;
+import com.journeyapps.barcodescanner.DecoratedBarcodeView;
+import com.journeyapps.barcodescanner.DefaultDecoderFactory;
 
 import org.json.JSONObject;
 
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.List;
 
 public class MainActivity extends Activity {
 
@@ -39,12 +55,19 @@ public class MainActivity extends Activity {
 
     private static final int REQ_SAVE = 4101;
     private static final int REQ_FILE = 4102;
+    private static final int REQ_CAMERA = 4103;
 
     private WebView webView;
     private String pendingSaveText;
     private ValueCallback<Uri[]> fileCallback;
     private WebView printWebView; // يبقى مرجعه حيًّا حتى تنتهي الطباعة
     private WebViewAssetLoader assetLoader;
+
+    // الماسح الحيّ (السلة السريعة): شريط كاميرا فوق الصفحة يبقى مفتوحًا بين الباركودات
+    private DecoratedBarcodeView scanView;
+    private boolean scanning = false;
+    private String lastScanned = null;
+    private ToneGenerator tone;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -58,7 +81,16 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setBackgroundColor(bg);
-        setContentView(webView);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(bg);
+        scanView = new DecoratedBarcodeView(this);
+        scanView.setVisibility(View.GONE);
+        int scanHeight = (int) (getResources().getDisplayMetrics().heightPixels * 0.32f);
+        root.addView(scanView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, scanHeight));
+        root.addView(webView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        setContentView(root);
 
         assetLoader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -214,6 +246,104 @@ public class MainActivity extends Activity {
         pv.loadDataWithBaseURL(BASE_URL, html, "text/html", "utf-8", null);
     }
 
+    // ---------- الماسح الحيّ ----------
+
+    private void js(String code) {
+        if (webView != null) webView.evaluateJavascript(code, null);
+    }
+
+    private void beep() {
+        try {
+            if (tone == null) tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 80);
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 120);
+        } catch (Exception ignored) {
+            // الصوت اختياري
+        }
+    }
+
+    /** يبدأ الماسح الحيّ (يطلب إذن الكاميرا أولًا). تصل الباركودات إلى window.__onScanCode. */
+    public void scanStart() {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
+            return;
+        }
+        beginScan();
+    }
+
+    private void beginScan() {
+        if (!scanning) {
+            scanning = true;
+            lastScanned = null;
+            scanView.setVisibility(View.VISIBLE);
+            scanView.setStatusText("وجّه الكاميرا نحو الباركود");
+            List<BarcodeFormat> formats = Arrays.asList(
+                    BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+                    BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93,
+                    BarcodeFormat.ITF, BarcodeFormat.CODABAR, BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX);
+            scanView.getBarcodeView().setDecoderFactory(new DefaultDecoderFactory(formats));
+            scanView.decodeContinuous(new BarcodeCallback() {
+                @Override
+                public void barcodeResult(BarcodeResult result) {
+                    String text = result == null ? null : result.getText();
+                    if (text == null || text.length() == 0) return;
+                    // لا نكرّر نفس الباركود مرتين متتاليتين (الكاميرا تلتقطه في عدة إطارات)
+                    if (text.equals(lastScanned)) return;
+                    lastScanned = text;
+                    beep();
+                    js("window.__onScanCode && window.__onScanCode(" + JSONObject.quote(text) + ")");
+                }
+
+                @Override
+                public void possibleResultPoints(List<ResultPoint> resultPoints) {
+                }
+            });
+        }
+        scanView.resume();
+        js("window.__onScanState && window.__onScanState('started')");
+    }
+
+    public void scanStop() {
+        if (!scanning) return;
+        scanning = false;
+        scanView.pause();
+        scanView.setVisibility(View.GONE);
+        js("window.__onScanState && window.__onScanState('stopped')");
+    }
+
+    public void scanTorch(boolean on) {
+        if (!scanning) return;
+        if (on) scanView.setTorchOn(); else scanView.setTorchOff();
+    }
+
+    /** يسمح بمسح الباركود الأخير مجددًا (مثلًا بعد حذفه من السلة). */
+    public void scanResetLast() {
+        lastScanned = null;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_CAMERA) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                beginScan();
+            } else {
+                js("window.__onScanState && window.__onScanState('denied')");
+            }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (scanning) scanView.resume();
+    }
+
+    @Override
+    protected void onPause() {
+        if (scanning) scanView.pause();
+        super.onPause();
+    }
+
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
@@ -231,6 +361,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (scanView != null) scanView.pause();
+        if (tone != null) tone.release();
         if (webView != null) {
             webView.destroy();
         }

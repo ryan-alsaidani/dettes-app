@@ -1,4 +1,4 @@
-import { h, toast, customerForm } from './dom.js';
+import { h, toast, customerForm, fill } from './dom.js';
 import { listCustomersWithTotals, saveCustomer } from '../customers.js';
 import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
@@ -64,10 +64,11 @@ export async function renderHome(root) {
     toast('تمت إضافة الزبون');
   } }, '+ زبون جديد');
 
-  root.replaceChildren(
+  fill(root, 
     h('h1', { class: 'title' }, 'الزبائن'),
     licenseCard(),
     reminder,
+    h('button', { class: 'btn cartbtn', onClick: () => { location.hash = '#/cart'; } }, '🛒 سلة جديدة (مسح المنتجات)'),
     search, addBtn, count, list);
   draw();
 }

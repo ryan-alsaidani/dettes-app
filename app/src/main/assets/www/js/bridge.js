@@ -70,3 +70,36 @@ export function shareText(text) {
   if (!hasShare()) throw new Error('no-bridge');
   window.Android.shareText(text);
 }
+
+// ---------- الماسح الحيّ (السلة السريعة) ----------
+let scanCodeHandler = null;
+let scanStateHandler = null;
+
+// يستدعيهما الغلاف الأصلي: كل باركود جديد (دون تكرار متتالٍ)، وحالة الكاميرا (started|stopped|denied)
+window.__onScanCode = (code) => { if (scanCodeHandler) scanCodeHandler(code); };
+window.__onScanState = (state) => { if (scanStateHandler) scanStateHandler(state); };
+
+export function hasLiveScan() {
+  return !!(window.Android && typeof window.Android.scanStart === 'function');
+}
+
+export function liveScanStart(onCode, onState) {
+  if (!hasLiveScan()) return;
+  scanCodeHandler = onCode;
+  scanStateHandler = onState || null;
+  window.Android.scanStart();
+}
+
+export function liveScanStop() {
+  scanCodeHandler = null;
+  scanStateHandler = null;
+  if (hasLiveScan()) window.Android.scanStop();
+}
+
+export function liveScanTorch(on) {
+  if (hasLiveScan()) window.Android.scanTorch(!!on);
+}
+
+export function liveScanResetLast() {
+  if (hasLiveScan()) window.Android.scanResetLast();
+}

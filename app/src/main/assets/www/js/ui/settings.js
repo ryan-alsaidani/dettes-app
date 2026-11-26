@@ -1,4 +1,4 @@
-import { h, toast, confirmDialog, messageDialog } from './dom.js';
+import { h, toast, confirmDialog, messageDialog, fill } from './dom.js';
 import { getSetting, setSetting } from '../settings.js';
 import { exportAll, importAll, validateBackup, backupFileName, daysSince } from '../backup.js';
 import { hasSave, saveFile } from '../bridge.js';
@@ -68,7 +68,7 @@ export async function renderSettings(root) {
     location.reload();
   });
 
-  root.replaceChildren(
+  fill(root, 
     h('h1', { class: 'title' }, 'الإعدادات'),
     licenseCard(),
     h('div', { class: 'card' },

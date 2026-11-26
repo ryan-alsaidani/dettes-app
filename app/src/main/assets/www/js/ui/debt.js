@@ -1,4 +1,4 @@
-import { h, toast, itemForm, field } from './dom.js';
+import { h, toast, itemForm, field, fill } from './dom.js';
 import * as P from '../products.js';
 import { getCustomer } from '../customers.js';
 import { createOrder } from '../debts.js';
@@ -149,7 +149,7 @@ export async function renderNewDebt(root, customerId) {
     history.back();
   });
 
-  root.replaceChildren(
+  fill(root, 
     h('button', { class: 'back', onClick: () => history.back() }, '→ رجوع'),
     h('h1', { class: 'title' }, 'دين جديد'),
     h('p', { class: 'dim' }, customer.name + (customer.note ? ' — ' + customer.note : '')),
