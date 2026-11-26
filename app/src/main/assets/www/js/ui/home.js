@@ -1,6 +1,8 @@
-import { h, toast, customerForm, fill } from './dom.js';
+import { h, toast, customerForm, fill, field } from './dom.js';
 import { listCustomersWithTotals, saveCustomer } from '../customers.js';
-import { getGlobalStats } from '../debts.js';
+import { listAllDebts } from '../debts.js';
+import { summarize, rangeBounds, filterByDateRange, addMonthsISO } from '../debtlogic.js';
+import { todayISO, formatDate } from '../dates.js';
 import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
 import { getSetting, setSetting } from '../settings.js';
@@ -9,7 +11,7 @@ import { needActive, licenseCard } from './licensecard.js';
 
 export async function renderHome(root) {
   let all = await listCustomersWithTotals();
-  const stats = await getGlobalStats();
+  const allDebts = await listAllDebts();
   const lastBackup = await getSetting('lastBackupAt', 0);
   const snoozeUntil = await getSetting('backupSnoozeUntil', 0);
   const staleDays = daysSince(lastBackup);
@@ -25,15 +27,57 @@ export async function renderHome(root) {
         await setSetting('backupSnoozeUntil', Date.now() + 86400000);
         reminder.remove();
       } }, 'لاحقًا'))) : null;
+  // ---------- بطاقة المعاملات مع نطاق التاريخ ----------
+  const RANGES = [['all', 'الكل'], ['m1', 'آخر شهر'], ['m2', 'آخر شهرين'], ['custom', 'من تاريخ إلى تاريخ']];
+  const loadRange = () => {
+    try {
+      const r = JSON.parse(localStorage.getItem('statsRange') || 'null');
+      if (r && RANGES.some(([k]) => k === r.key)) return { key: r.key, from: r.from || '', to: r.to || '' };
+    } catch (e) { /* افتراضي */ }
+    return { key: 'all', from: '', to: '' };
+  };
+  const range = loadRange();
+  const saveRange = () => { try { localStorage.setItem('statsRange', JSON.stringify(range)); } catch (e) { /* اختياري */ } };
+
   const tile = (label, value, cls, wide) => h('div', { class: 'tile' + (wide ? ' wide' : '') },
     h('div', { class: 'tile-lbl' }, label),
     h('div', { class: 'tile-val' + (cls ? ' ' + cls : '') }, formatMillimes(value)));
+  const rangeChips = h('div', { class: 'chips seg' });
+  const fromInput = h('input', { class: 'input', type: 'date', value: range.from });
+  const toInput = h('input', { class: 'input', type: 'date', value: range.to });
+  const customRow = h('div', { class: 'range-row' }, field('من', fromInput), field('إلى', toInput));
+  const grid = h('div', { class: 'stats-grid' });
+  const caption = h('p', { class: 'dim small' });
+
+  function drawStats() {
+    fill(rangeChips, RANGES.map(([k, label]) =>
+      h('button', { class: 'chip' + (range.key === k ? ' on' : ''), type: 'button', onClick: () => {
+        range.key = k;
+        if (k === 'custom' && !range.from) { range.from = addMonthsISO(todayISO(), -1); fromInput.value = range.from; }
+        saveRange();
+        drawStats();
+      } }, label)));
+    customRow.hidden = range.key !== 'custom';
+    const b = rangeBounds(range.key, todayISO(), range.from, range.to);
+    const rows = filterByDateRange(allDebts, b.from, b.to);
+    const st = summarize(rows);
+    fill(grid,
+      tile('إجمالي ما تم تسديده', st.paid, 'ok'),
+      tile('إجمالي غير المسدَّد', st.remaining, 'warn'),
+      tile('مجموع المسدَّد مع غير المسدَّد', st.total, '', true));
+    const span = !b.from && !b.to ? 'كل الديون المسجَّلة'
+      : b.from && b.to ? 'الديون المسجَّلة من ' + formatDate(b.from) + ' إلى ' + formatDate(b.to)
+      : b.from ? 'الديون المسجَّلة من ' + formatDate(b.from) + ' حتى اليوم'
+      : 'الديون المسجَّلة حتى ' + formatDate(b.to);
+    caption.textContent = span + ' (' + rows.length + ' بند)';
+  }
+  fromInput.addEventListener('change', () => { range.from = fromInput.value; saveRange(); drawStats(); });
+  toInput.addEventListener('change', () => { range.to = toInput.value; saveRange(); drawStats(); });
+
   const statsCard = all.length ? h('div', { class: 'card' },
     h('h2', { class: 'stats-title' }, 'المعاملات المتأتية من توفير خدمة الدفع المؤجل'),
-    h('div', { class: 'stats-grid' },
-      tile('إجمالي ما تم تسديده', stats.paid, 'ok'),
-      tile('إجمالي غير المسدَّد', stats.remaining, 'warn'),
-      tile('مجموع المسدَّد مع غير المسدَّد', stats.total, '', true))) : null;
+    rangeChips, customRow, grid, caption) : null;
+  if (statsCard) drawStats();
   const list = h('div', { class: 'list' });
   const count = h('p', { class: 'dim small' });
   const search = h('input', { class: 'input', type: 'search',

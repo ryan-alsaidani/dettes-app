@@ -101,3 +101,36 @@ export function distributePaid(items, paidNow) {
   }
   return { total, applied, change: given - applied, pays };
 }
+
+// ---------- نطاق التاريخ لبطاقة الإحصاءات ----------
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/** يضيف n شهرًا (سالبًا أو موجبًا) إلى تاريخ YYYY-MM-DD مع ضبط آخر يوم في الشهر (31 مارس - شهر = 28 فبراير). */
+export function addMonthsISO(iso, n) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + n;
+  const yy = Math.floor(total / 12);
+  const mm = ((total % 12) + 12) % 12;
+  const last = new Date(yy, mm + 1, 0).getDate();
+  return `${yy}-${pad2(mm + 1)}-${pad2(Math.min(Number(m[3]), last))}`;
+}
+
+/** key: all | m1 (آخر شهر) | m2 (آخر شهرين) | custom (من..إلى، أيٌّ منهما اختياري). يعيد {from, to} (null = بلا حدّ). */
+export function rangeBounds(key, today, from, to) {
+  if (key === 'm1') return { from: addMonthsISO(today, -1), to: null };
+  if (key === 'm2') return { from: addMonthsISO(today, -2), to: null };
+  if (key === 'custom') {
+    let f = from || null;
+    let t = to || null;
+    if (f && t && f > t) [f, t] = [t, f];
+    return { from: f, to: t };
+  }
+  return { from: null, to: null };
+}
+
+/** الديون المسجَّلة (بتاريخ الدين) داخل النطاق، حدّاه شاملان. */
+export function filterByDateRange(debts, from, to) {
+  return debts.filter(d => (!from || d.date >= from) && (!to || d.date <= to));
+}

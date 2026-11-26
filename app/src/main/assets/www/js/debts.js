@@ -64,6 +64,8 @@ export async function createOrder({ customerId, date, note, items, paidNow = 0 }
   });
 }
 
+export const listAllDebts = () => db.getAll('debts');
+
 /** مجاميع كل الديون: {total, paid, remaining, open}. */
 export async function getGlobalStats() {
   return summarize(await db.getAll('debts'));

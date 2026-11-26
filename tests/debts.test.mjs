@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { statusOf, summarize, filterByStatus, sortDebts, groupByOrder, debtHaystack, distributePaid } from '../app/src/main/assets/www/js/debtlogic.js';
+import { statusOf, summarize, filterByStatus, sortDebts, groupByOrder, debtHaystack, distributePaid, addMonthsISO, rangeBounds, filterByDateRange } from '../app/src/main/assets/www/js/debtlogic.js';
 import { todayISO, formatDate } from '../app/src/main/assets/www/js/dates.js';
 import { productHaystack } from '../app/src/main/assets/www/js/products.js';
 import { normalize, matches } from '../app/src/main/assets/www/js/search.js';
@@ -114,6 +114,32 @@ assert.equal(formatDate(null), '');
     assert.equal(r.pays.reduce((a, b) => a + b, 0), r.applied);
     r.pays.forEach((p, i) => assert.ok(p >= 0 && p <= its[i].unitPrice * its[i].qty));
   }
+}
+
+// ---- نطاق التاريخ ----
+assert.equal(addMonthsISO('2026-03-31', -1), '2026-02-28');
+assert.equal(addMonthsISO('2028-03-31', -1), '2028-02-29');
+assert.equal(addMonthsISO('2026-01-15', -2), '2025-11-15');   // عبور السنة
+assert.equal(addMonthsISO('2026-01-31', 1), '2026-02-28');
+assert.equal(addMonthsISO('2026-12-10', 1), '2027-01-10');
+assert.equal(addMonthsISO('2026-05-10', -12), '2025-05-10');
+assert.equal(addMonthsISO('خطأ', 1), 'خطأ');
+assert.deepEqual(rangeBounds('all', '2026-11-26'), { from: null, to: null });
+assert.deepEqual(rangeBounds('m1', '2026-11-26'), { from: '2026-10-26', to: null });
+assert.deepEqual(rangeBounds('m2', '2026-11-26'), { from: '2026-09-26', to: null });
+assert.deepEqual(rangeBounds('custom', '2026-11-26', '2026-01-01', '2026-02-01'), { from: '2026-01-01', to: '2026-02-01' });
+assert.deepEqual(rangeBounds('custom', '2026-11-26', '2026-05-01', '2026-02-01'), { from: '2026-02-01', to: '2026-05-01' }); // ترتيب معكوس
+assert.deepEqual(rangeBounds('custom', '2026-11-26', '', '2026-02-01'), { from: null, to: '2026-02-01' });
+{
+  const ds = [D(1, 1, '2026-08-15', 1000, 1), D(2, 1, '2026-09-26', 2000, 1), D(3, 1, '2026-10-26', 3000, 1, 1000), D(4, 1, '2026-11-20', 500, 1, 500)];
+  assert.deepEqual(filterByDateRange(ds, null, null).map(d => d.id), [1, 2, 3, 4]);
+  assert.deepEqual(filterByDateRange(ds, '2026-09-26', null).map(d => d.id), [2, 3, 4]);       // الحدّ الأدنى شامل
+  assert.deepEqual(filterByDateRange(ds, '2026-10-26', null).map(d => d.id), [3, 4]);
+  assert.deepEqual(filterByDateRange(ds, '2026-09-01', '2026-10-26').map(d => d.id), [2, 3]);   // الحدّ الأعلى شامل
+  assert.deepEqual(filterByDateRange(ds, null, '2026-08-31').map(d => d.id), [1]);
+  assert.deepEqual(filterByDateRange(ds, '2027-01-01', null), []);
+  const s3 = summarize(filterByDateRange(ds, '2026-10-26', null));
+  assert.deepEqual([s3.total, s3.paid, s3.remaining], [3500, 1500, 2000]);
 }
 
 console.log('debts tests OK');

@@ -1,6 +1,6 @@
-import { h, toast, confirmDialog, messageDialog, fill } from './dom.js';
+import { h, toast, confirmDialog, messageDialog, fill, sheet } from './dom.js';
 import { getSetting, setSetting } from '../settings.js';
-import { exportAll, importAll, validateBackup, backupFileName, daysSince } from '../backup.js';
+import { exportAll, importBackup, previewImport, validateBackup, backupFileName, daysSince } from '../backup.js';
 import { hasSave, saveFile } from '../bridge.js';
 import { THEMES, getTheme, setTheme } from '../theme.js';
 import { formatDate, todayISO } from '../dates.js';
@@ -11,6 +11,62 @@ function lastBackupText(ts) {
   if (d === null) return 'لم تُحفظ أي نسخة احتياطية بعد.';
   const date = formatDate(todayISO(new Date(ts)));
   return d === 0 ? 'آخر نسخة: اليوم (' + date + ')' : 'آخر نسخة: قبل ' + d + ' يوم (' + date + ')';
+}
+
+const COUNT_LABELS = { customers: 'زبون', orders: 'فاتورة', debts: 'دين', payments: 'دفعة', products: 'منتج', brands: 'علامة' };
+const SCOPE_OPTIONS = [['all', 'كل شيء'], ['customers', 'الزبائن فقط'], ['products', 'المنتجات فقط']];
+const MODE_OPTIONS = [['merge', 'إضافة الناقص فقط'], ['replace', 'استبدال الموجود']];
+
+const describe = (counts) => Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => n + ' ' + COUNT_LABELS[k]).join('، ');
+
+/** نافذة خيارات الاستيراد: ماذا نستورد (الكل/الزبائن/المنتجات) وكيف (إضافة الناقص أم استبدال الموجود). */
+function askImportOptions(backup) {
+  return new Promise(resolve => {
+    let scope = 'all';
+    let mode = 'merge';
+    let seq = 0;
+    const scopeBox = h('div', { class: 'chips seg' });
+    const modeBox = h('div', { class: 'chips seg' });
+    const info = h('p', { class: 'dim', style: 'line-height:1.9' });
+    const go = h('button', { class: 'btn' }, 'تنفيذ');
+
+    function chips(box, options, current, onPick) {
+      fill(box, options.map(([k, label]) =>
+        h('button', { class: 'chip' + (k === current ? ' on' : ''), type: 'button', onClick: () => onPick(k) }, label)));
+    }
+    async function refresh() {
+      chips(scopeBox, SCOPE_OPTIONS, scope, k => { scope = k; refresh(); });
+      chips(modeBox, MODE_OPTIONS, mode, k => { mode = k; refresh(); });
+      go.className = 'btn' + (mode === 'replace' ? ' danger' : '');
+      go.disabled = true;
+      const my = ++seq;
+      info.textContent = '...';
+      let p;
+      try { p = await previewImport(backup, { scope, mode }); } catch (e) { info.textContent = 'تعذّرت المعاينة.'; return; }
+      if (my !== seq) return;
+      if (mode === 'merge') {
+        const add = describe(p.add);
+        const skip = [p.skipped.customers ? p.skipped.customers + ' زبون' : '', p.skipped.products ? p.skipped.products + ' منتج' : ''].filter(Boolean).join(' و');
+        info.textContent = (add ? 'سيُضاف: ' + add + '.' : 'لا شيء جديد لإضافته.')
+          + (skip ? ' يُتخطّى الموجود أصلًا: ' + skip + ' (الزبون بنفس الاسم والهاتف والوصف يُتخطّى مع ديونه).' : '')
+          + ' لا يُلمس شيء من بياناتك الحالية.';
+        go.disabled = !add;
+      } else {
+        info.textContent = 'عندك الآن: ' + (describe(p.current) || 'لا شيء') + '. سيُستبدل بما في الملف: ' + (describe(p.incoming) || 'لا شيء') + '.';
+        go.disabled = false;
+      }
+    }
+    go.addEventListener('click', () => { s.close(); resolve({ scope, mode }); });
+
+    const s = sheet([
+      h('h2', { class: 'sheet-title' }, 'استيراد من نسخة'),
+      h('p', { class: 'dim small' }, 'ماذا تستورد؟'), scopeBox,
+      h('p', { class: 'dim small' }, 'كيف؟'), modeBox,
+      info,
+      h('div', { class: 'btn-row' }, go, h('button', { class: 'btn ghost', onClick: () => { s.close(); resolve(null); } }, 'إلغاء')),
+    ]);
+    refresh();
+  });
 }
 
 export async function renderSettings(root) {
@@ -66,13 +122,14 @@ export async function renderSettings(root) {
     const v = validateBackup(backup);
     if (!v.ok) { await messageDialog(v.error); return; }
 
-    const c = v.counts;
-    const msg = `النسخة تحوي ${c.customers} زبون و${c.debts} دين و${c.products} منتج و${c.payments} دفعة. سيُستبدل بها كل ما في التطبيق الآن ولا يمكن التراجع. متابعة؟`;
-    if (!(await confirmDialog(msg, 'استرجاع', true))) return;
+    const opt = await askImportOptions(backup);
+    if (!opt) return;
+    if (opt.mode === 'replace' && !(await confirmDialog('سيُحذف ما عندك الآن في النطاق المختار ويُستبدل بما في الملف، ولا يمكن التراجع. متابعة؟', 'استبدال', true))) return;
+    let r;
     try {
-      await importAll(backup);
-    } catch (e) { await messageDialog('فشل الاسترجاع. لم يتغيّر شيء.'); return; }
-    toast('تم الاسترجاع');
+      r = await importBackup(backup, opt);
+    } catch (e) { await messageDialog(e && e.message && e.code === 'expired' ? e.message : 'فشل الاستيراد. لم يتغيّر شيء.'); return; }
+    toast(opt.mode === 'merge' ? 'تمت إضافة الناقص' : 'تم الاستبدال');
     location.hash = '#/';
     location.reload();
   });
@@ -99,6 +156,6 @@ export async function renderSettings(root) {
       h('p', { class: 'dim small' }, 'بيانات التطبيق محفوظة داخل الهاتف فقط. مسح بيانات التطبيق أو حذفه يمسح كل شيء، فاحفظ نسخة بانتظام في مكان آمن (التنزيلات أو Drive أو أرسلها لنفسك).'),
       lastTxt,
       h('button', { class: 'btn', onClick: doExport }, 'حفظ نسخة احتياطية'),
-      h('button', { class: 'btn ghost', onClick: async () => { if (await needActive()) fileInput.click(); } }, 'استرجاع من نسخة'),
+      h('button', { class: 'btn ghost', onClick: async () => { if (await needActive()) fileInput.click(); } }, 'استيراد من نسخة'),
       fileInput));
 }
