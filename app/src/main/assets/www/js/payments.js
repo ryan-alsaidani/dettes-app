@@ -2,6 +2,7 @@ import * as db from './db.js';
 import { openDB } from './db.js';
 import { todayISO } from './dates.js';
 import { requireActive } from './license.js';
+import { newUid, ensureUid } from './uid.js';
 
 /**
  * يطبّق تسديدًا في معاملة واحدة: يحدّث الديون ويسجّل الدفعة مع تفاصيل التخصيص (للتراجع).
@@ -28,14 +29,15 @@ export async function applyPayment({ customerId, items, received }) {
         }
       }
       let applied = 0;
+      const now = Date.now();
       for (const [it, d] of loaded) {
-        ds.put({ ...d, paid: d.paid + it.pay, remaining: d.remaining - it.pay });
+        ds.put({ ...d, uid: ensureUid('debts', d), paid: d.paid + it.pay, remaining: d.remaining - it.pay, updatedAt: now });
         applied += it.pay;
       }
       ps.add({
-        customerId, amount: applied,
+        uid: newUid(), customerId, amount: applied,
         change: Math.max(0, (received || applied) - applied),
-        date: todayISO(), createdAt: Date.now(),
+        date: todayISO(), createdAt: now, updatedAt: now,
         allocations: items.map(it => ({ debtId: it.debtId, amount: it.pay })),
       });
     }
@@ -60,23 +62,26 @@ export async function undoPayment(paymentId) {
   requireActive();
   const dbx = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = dbx.transaction(['debts', 'payments'], 'readwrite');
+    const tx = dbx.transaction(['debts', 'payments', 'tombstones'], 'readwrite');
     const ds = tx.objectStore('debts');
     const ps = tx.objectStore('payments');
+    const tombs = tx.objectStore('tombstones');
     const gp = ps.get(paymentId);
     gp.onsuccess = () => {
       const p = gp.result;
       if (!p) return;
+      const now = Date.now();
       for (const a of p.allocations || []) {
         const gd = ds.get(a.debtId);
         gd.onsuccess = () => {
           const d = gd.result;
           if (!d) return;
           const paid = Math.max(0, d.paid - a.amount);
-          ds.put({ ...d, paid, remaining: d.unitPrice * d.qty - paid });
+          ds.put({ ...d, uid: ensureUid('debts', d), paid, remaining: d.unitPrice * d.qty - paid, updatedAt: now });
         };
       }
       ps.delete(paymentId);
+      tombs.put({ uid: ensureUid('payments', p), kind: 'payments', at: now });
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);

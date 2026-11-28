@@ -10,6 +10,7 @@ import android.graphics.Color;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.net.Uri;
+import android.util.Base64;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -19,6 +20,7 @@ import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -57,9 +59,10 @@ public class MainActivity extends Activity {
     private static final int REQ_SAVE = 4101;
     private static final int REQ_FILE = 4102;
     private static final int REQ_CAMERA = 4103;
+    private static final int REQ_TREE = 4104;
 
     private WebView webView;
-    private String pendingSaveText;
+    private byte[] pendingSaveBytes;
     private ValueCallback<Uri[]> fileCallback;
     private WebView printWebView; // يبقى مرجعه حيًّا حتى تنتهي الطباعة
     private WebViewAssetLoader assetLoader;
@@ -156,7 +159,12 @@ public class MainActivity extends Activity {
 
     /** يفتح «حفظ ملف» الأصلي. النتيجة تصل إلى window.__onSaved(ok, message). */
     public void startSave(String name, String mime, String text) {
-        pendingSaveText = text;
+        startSaveBytes(name, mime, text == null ? null : text.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** نافذة «حفظ ملف» لبايتات (نص أو ZIP). النتيجة: window.__onSaved(ok, message). */
+    public void startSaveBytes(String name, String mime, byte[] bytes) {
+        pendingSaveBytes = bytes;
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType(mime);
@@ -164,15 +172,15 @@ public class MainActivity extends Activity {
         try {
             startActivityForResult(intent, REQ_SAVE);
         } catch (Exception e) {
-            pendingSaveText = null;
+            pendingSaveBytes = null;
             webView.evaluateJavascript("window.__onSaved && window.__onSaved(false, " + JSONObject.quote("تعذّر فتح نافذة الحفظ") + ")", null);
         }
     }
 
     private void finishSave(int resultCode, Intent data) {
-        String text = pendingSaveText;
-        pendingSaveText = null;
-        if (resultCode != RESULT_OK || data == null || data.getData() == null || text == null) {
+        byte[] bytes = pendingSaveBytes;
+        pendingSaveBytes = null;
+        if (resultCode != RESULT_OK || data == null || data.getData() == null || bytes == null) {
             webView.evaluateJavascript("window.__onSaved && window.__onSaved(false, null)", null);
             return;
         }
@@ -180,7 +188,7 @@ public class MainActivity extends Activity {
             OutputStream os = getContentResolver().openOutputStream(data.getData(), "wt");
             if (os == null) throw new java.io.IOException("لا يمكن الكتابة في هذا الموضع");
             try {
-                os.write(text.getBytes(StandardCharsets.UTF_8));
+                os.write(bytes);
             } finally {
                 os.close();
             }
@@ -191,10 +199,89 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- مجلد النسخ الاحتياطية (SAF) ----------
+
+    /** يفتح منتقي المجلد. النتيجة: window.__onFolderPicked(uri, name) أو (null, null) عند الإلغاء. */
+    public void folderPick() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQ_TREE);
+        } catch (Exception e) {
+            js("window.__onFolderPicked && window.__onFolderPicked(null, null)");
+        }
+    }
+
+    /**
+     * عملية على المجلد في خيط خلفي: write / read / list. البيانات بصيغة Base64.
+     * النتيجة: window.__onFolderOp(id, ok, result, error).
+     */
+    public void folderOp(final String id, final String op, final String treeUri, final String subDir,
+                         final String name, final String mime, final String b64) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String result = null;
+                String error = null;
+                boolean ok = true;
+                try {
+                    Uri tree = Uri.parse(treeUri);
+                    FolderStore store = new FolderStore(getContentResolver());
+                    if ("write".equals(op)) {
+                        store.write(tree, subDir, name, mime, Base64.decode(b64, Base64.DEFAULT), true);
+                        result = "";
+                    } else if ("read".equals(op)) {
+                        byte[] data = store.read(tree, subDir, name);
+                        result = data == null ? null : Base64.encodeToString(data, Base64.NO_WRAP);
+                    } else if ("list".equals(op)) {
+                        result = store.list(tree, subDir);
+                    } else {
+                        throw new IllegalArgumentException("عملية غير معروفة");
+                    }
+                } catch (Exception e) {
+                    ok = false;
+                    error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                }
+                final String call = "window.__onFolderOp && window.__onFolderOp(" + JSONObject.quote(id) + "," + ok + ","
+                        + (result == null ? "null" : JSONObject.quote(result)) + ","
+                        + (error == null ? "null" : JSONObject.quote(error)) + ")";
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        js(call);
+                    }
+                });
+            }
+        }).start();
+    }
+
+    /** يبقي الشاشة مضاءة أثناء عرض/مسح رموز التحديثات. */
+    public void keepAwake(boolean on) {
+        if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQ_SAVE) {
             finishSave(resultCode, data);
+            return;
+        }
+        if (requestCode == REQ_TREE) {
+            Uri tree = (resultCode == RESULT_OK && data != null) ? data.getData() : null;
+            if (tree == null) {
+                js("window.__onFolderPicked && window.__onFolderPicked(null, null)");
+            } else {
+                try {
+                    getContentResolver().takePersistableUriPermission(tree,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                } catch (Exception ignored) {
+                    // قد يرفض بعض المزوّدين: يبقى الإذن طوال الجلسة
+                }
+                String label = FolderStore.displayName(getContentResolver(), tree);
+                js("window.__onFolderPicked && window.__onFolderPicked(" + JSONObject.quote(tree.toString()) + "," + JSONObject.quote(label) + ")");
+            }
             return;
         }
         if (requestCode == REQ_FILE) {

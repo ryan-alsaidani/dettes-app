@@ -2,6 +2,10 @@
 import { openDB } from './db.js';
 import { requireActive, isLicenseRecord } from './license.js';
 import { normalize } from './search.js';
+import { customerKey, productKey } from './keys.js';
+import { ensureUid } from './uid.js';
+
+export { customerKey, productKey };
 
 export const BACKUP_APP = 'dettes-app';
 export const BACKUP_VERSION = 1;
@@ -90,16 +94,7 @@ export const SCOPES = {
   products: ['products', 'brands'],
 };
 
-const digits = (s) => String(s ?? '').replace(/\D/g, '');
-
-/** هوية الزبون عند الدمج: الاسم الموحَّد + أرقام الهاتف + الوصف (فأحمدان بوصفين مختلفين زبونان مختلفان). */
-export const customerKey = (c) => [c.nameNorm || normalize(c.name), digits(c.phone), normalize(c.note || '')].join('|');
-
-/** هوية المنتج عند الدمج: الباركود إن وُجد، وإلا الاسم + العلامة. */
-export const productKey = (p) => (p.barcode
-  ? 'b:' + String(p.barcode).trim()
-  : 'n:' + [p.nameNorm || normalize(p.name), p.brandNorm || normalize(p.brand || '')].join('|'));
-
+const UID_KINDS = ['products', 'customers', 'orders', 'debts', 'payments'];
 const maxId = (arr) => (arr || []).reduce((m, r) => Math.max(m, r.id || 0), 0);
 
 /**
@@ -123,7 +118,7 @@ export function mergeData(local, backup, scope) {
       const k = productKey(p);
       const ex = have.get(k);
       if (ex) { productMap.set(p.id, ex.id); skipped.products++; continue; }
-      const rec = { ...p, id: next++ };
+      const rec = { ...p, id: next++, uid: ensureUid('products', p), updatedAt: p.updatedAt || p.createdAt || 0 };
       add.products.push(rec);
       have.set(k, rec);
       productMap.set(p.id, rec.id);
@@ -146,14 +141,14 @@ export function mergeData(local, backup, scope) {
       const k = customerKey(c);
       if (have.has(k)) { skipped.customers++; continue; }
       have.add(k);
-      const rec = { ...c, id: nextC++ };
+      const rec = { ...c, id: nextC++, uid: ensureUid('customers', c), updatedAt: c.updatedAt || c.createdAt || 0 };
       add.customers.push(rec);
       custMap.set(c.id, rec.id);
     }
     const orderMap = new Map();
     for (const o of B('orders')) {
       if (!custMap.has(o.customerId)) continue;
-      const rec = { ...o, id: nextO++, customerId: custMap.get(o.customerId) };
+      const rec = { ...o, id: nextO++, uid: ensureUid('orders', o), updatedAt: o.updatedAt || o.createdAt || 0, customerId: custMap.get(o.customerId) };
       add.orders.push(rec);
       orderMap.set(o.id, rec.id);
     }
@@ -161,7 +156,7 @@ export function mergeData(local, backup, scope) {
     for (const d of B('debts')) {
       if (!custMap.has(d.customerId) || !orderMap.has(d.orderId)) continue;
       const rec = {
-        ...d, id: nextD++,
+        ...d, id: nextD++, uid: ensureUid('debts', d), updatedAt: d.updatedAt || d.createdAt || 0,
         customerId: custMap.get(d.customerId),
         orderId: orderMap.get(d.orderId),
         // ربط المنتج يُحفظ فقط إن دُمجت المنتجات أيضًا (لقطة الاسم والسعر داخل الدين تكفي)
@@ -173,7 +168,7 @@ export function mergeData(local, backup, scope) {
     for (const p of B('payments')) {
       if (!custMap.has(p.customerId)) continue;
       add.payments.push({
-        ...p, id: nextP++, customerId: custMap.get(p.customerId),
+        ...p, id: nextP++, uid: ensureUid('payments', p), updatedAt: p.updatedAt || p.createdAt || 0, customerId: custMap.get(p.customerId),
         allocations: (p.allocations || []).filter(a => debtMap.has(a.debtId)).map(a => ({ ...a, debtId: debtMap.get(a.debtId) })),
       });
     }
@@ -241,14 +236,16 @@ export async function importBackup(backup, { scope = 'all', mode = 'replace' } =
     ? (await readStores(db, ['settings'])).settings.filter(isLicenseRecord)
     : [];
   await new Promise((resolve, reject) => {
-    const tx = db.transaction(names, 'readwrite');
+    const tx = db.transaction(scope === 'all' ? [...names, 'tombstones'] : names, 'readwrite');
     for (const name of names) {
       const store = tx.objectStore(name);
       store.clear();
-      const records = name === 'settings' ? stripLicense(backup.stores[name]) : backup.stores[name];
+      let records = name === 'settings' ? stripLicense(backup.stores[name]) : backup.stores[name];
+      if (UID_KINDS.includes(name)) records = records.map(r => (r.uid ? r : { ...r, uid: ensureUid(name, r), updatedAt: r.updatedAt || r.createdAt || Date.now() }));
       for (const rec of records) store.put(rec);
     }
     if (scope === 'all') {
+      tx.objectStore('tombstones').clear(); // قبور الحذف القديمة لا تُطبَّق على بيانات مستبدَلة
       const settingsStore = tx.objectStore('settings');
       for (const rec of keep) settingsStore.put(rec);
     }

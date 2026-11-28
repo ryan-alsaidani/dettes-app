@@ -1,7 +1,10 @@
 import { h, toast, confirmDialog, messageDialog, fill, sheet } from './dom.js';
 import { getSetting, setSetting } from '../settings.js';
-import { exportAll, importBackup, previewImport, validateBackup, backupFileName, daysSince } from '../backup.js';
-import { hasSave, saveFile } from '../bridge.js';
+import { exportAll, importBackup, previewImport, validateBackup, daysSince } from '../backup.js';
+import { saveFileBytes, hasFolder, folderPick } from '../bridge.js';
+import { getBackupFolder, setBackupFolder } from '../devstate.js';
+import { saveToImportFolder, saveToNewFolder, readLatest, MANIFEST_NAME } from '../backupfolder.js';
+import { buildBackupZip, backupFromZip, zipFileName } from '../zipbackup.js';
 import { THEMES, getTheme, setTheme } from '../theme.js';
 import { formatDate, todayISO } from '../dates.js';
 import { needActive, licenseCard } from './licensecard.js';
@@ -20,7 +23,7 @@ const MODE_OPTIONS = [['merge', 'إضافة الناقص فقط'], ['replace', '
 const describe = (counts) => Object.entries(counts).filter(([, n]) => n > 0).map(([k, n]) => n + ' ' + COUNT_LABELS[k]).join('، ');
 
 /** نافذة خيارات الاستيراد: ماذا نستورد (الكل/الزبائن/المنتجات) وكيف (إضافة الناقص أم استبدال الموجود). */
-function askImportOptions(backup) {
+function askImportOptions(backup, label = '') {
   return new Promise(resolve => {
     let scope = 'all';
     let mode = 'merge';
@@ -60,6 +63,7 @@ function askImportOptions(backup) {
 
     const s = sheet([
       h('h2', { class: 'sheet-title' }, 'استيراد من نسخة'),
+      label ? h('p', { class: 'dim small' }, label) : null,
       h('p', { class: 'dim small' }, 'ماذا تستورد؟'), scopeBox,
       h('p', { class: 'dim small' }, 'كيف؟'), modeBox,
       info,
@@ -82,25 +86,88 @@ export async function renderSettings(root) {
   }
   drawThemes();
 
-  async function doExport() {
-    if (!hasSave()) { await messageDialog('الحفظ متاح داخل التطبيق فقط.'); return; }
-    const backup = await exportAll();
+  const folderTxt = h('p', { class: 'dim' });
+  function drawFolder() {
+    const f = getBackupFolder();
+    folderTxt.textContent = f ? 'مجلد النسخ (الاستيراد): ' + f.name : 'لم يُحدَّد مجلد للنسخ بعد.';
+  }
+  drawFolder();
+
+  const errText = (e) => ({
+    'no-folder': 'حدّد مجلد النسخ أولًا.',
+    'no-backup': 'لا توجد نسخة احتياطية في هذا المجلد.',
+    'bad-json': 'ملف النسخة تالف أو ليس JSON.',
+    'no-bridge': 'هذه الميزة متاحة داخل التطبيق فقط.',
+  }[e && e.message] || ('تعذّرت العملية: ' + ((e && e.message) || e)));
+
+  async function pickFolder() {
+    let f;
+    try { f = await folderPick(); } catch (e) { await messageDialog(errText(e)); return null; }
+    if (f) { setBackupFolder(f); drawFolder(); }
+    return f;
+  }
+
+  /** مسار الاستيراد الموحَّد: فحص الملف ثم خيارات (ماذا/كيف) ثم التنفيذ. */
+  async function runImportFlow(backup, label) {
+    const v = validateBackup(backup);
+    if (!v.ok) { await messageDialog(v.error); return; }
+    const opt = await askImportOptions(backup, label);
+    if (!opt) return;
+    if (opt.mode === 'replace' && !(await confirmDialog('سيُحذف ما عندك الآن في النطاق المختار ويُستبدل بما في الملف، ولا يمكن التراجع. متابعة؟', 'استبدال', true))) return;
+    try {
+      await importBackup(backup, opt);
+    } catch (e) { await messageDialog(e && e.code === 'expired' ? e.message : 'فشل الاستيراد. لم يتغيّر شيء.'); return; }
+    toast(opt.mode === 'merge' ? 'تمت إضافة الناقص' : 'تم الاستبدال');
+    location.hash = '#/';
+    location.reload();
+  }
+
+  async function doSave() {
+    if (!hasFolder()) { await messageDialog(errText({ message: 'no-bridge' })); return; }
+    if (!getBackupFolder() && !(await pickFolder())) return;
+    try {
+      const r = await saveToImportFolder();
+      lastTxt.textContent = lastBackupText(Date.now());
+      toast('تم الحفظ: ' + r.fileName);
+    } catch (e) { await messageDialog(errText(e)); }
+  }
+
+  async function doSaveElsewhere() {
+    if (!hasFolder()) { await messageDialog(errText({ message: 'no-bridge' })); return; }
+    try {
+      const r = await saveToNewFolder();
+      if (!r) return;
+      lastTxt.textContent = lastBackupText(Date.now());
+      await messageDialog('حُفظت النسخة في مجلد جديد: ' + r.folderName + '\nلاستيراد منه لاحقًا بزر «الأحدث» اجعله مجلد النسخ من «تحديد/تغيير المجلد».');
+    } catch (e) { await messageDialog(errText(e)); }
+  }
+
+  async function doLatest() {
+    if (!(await needActive())) return;
+    let r;
+    try { r = await readLatest(); } catch (e) { await messageDialog(errText(e)); return; }
+    await runImportFlow(r.backup, 'الأحدث: ' + r.fileName + (r.via === 'scan' ? ' (وُجد بفحص المجلد لغياب ' + MANIFEST_NAME + ')' : ''));
+  }
+
+  async function doZip() {
     let res;
     try {
-      res = await saveFile(backupFileName(), 'application/json', JSON.stringify(backup));
-    } catch (e) {
-      await messageDialog('تعذّر فتح نافذة الحفظ.');
-      return;
-    }
+      const zip = await buildBackupZip(await exportAll());
+      res = await saveFileBytes(zipFileName(), 'application/zip', zip);
+    } catch (e) { await messageDialog(errText(e)); return; }
     if (res.ok) {
-      const now = Date.now();
-      await setSetting('lastBackupAt', now);
-      lastTxt.textContent = lastBackupText(now);
-      toast('تم حفظ النسخة الاحتياطية');
-    } else if (res.message) {
-      await messageDialog('فشل الحفظ: ' + res.message);
-    }
+      await setSetting('lastBackupAt', Date.now());
+      lastTxt.textContent = lastBackupText(Date.now());
+      toast('تم إنشاء ملف ZIP');
+    } else if (res.message) await messageDialog('فشل الحفظ: ' + res.message);
   }
+
+  const readFile = (file, as) => new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(fr.error);
+    if (as === 'text') fr.readAsText(file, 'utf-8'); else fr.readAsArrayBuffer(file);
+  });
 
   const fileInput = h('input', { type: 'file', hidden: true });
   fileInput.addEventListener('change', async () => {
@@ -108,33 +175,23 @@ export async function renderSettings(root) {
     fileInput.value = '';
     if (!file) return;
     let text;
-    try {
-      text = await new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(String(fr.result));
-        fr.onerror = () => reject(fr.error);
-        fr.readAsText(file, 'utf-8');
-      });
-    } catch (e) { await messageDialog('تعذّرت قراءة الملف.'); return; }
-
+    try { text = String(await readFile(file, 'text')); } catch (e) { await messageDialog('تعذّرت قراءة الملف.'); return; }
     let backup;
     try { backup = JSON.parse(text); } catch (e) { await messageDialog('الملف ليس بصيغة JSON صالحة.'); return; }
-    const v = validateBackup(backup);
-    if (!v.ok) { await messageDialog(v.error); return; }
-
-    const opt = await askImportOptions(backup);
-    if (!opt) return;
-    if (opt.mode === 'replace' && !(await confirmDialog('سيُحذف ما عندك الآن في النطاق المختار ويُستبدل بما في الملف، ولا يمكن التراجع. متابعة؟', 'استبدال', true))) return;
-    let r;
-    try {
-      r = await importBackup(backup, opt);
-    } catch (e) { await messageDialog(e && e.message && e.code === 'expired' ? e.message : 'فشل الاستيراد. لم يتغيّر شيء.'); return; }
-    toast(opt.mode === 'merge' ? 'تمت إضافة الناقص' : 'تم الاستبدال');
-    location.hash = '#/';
-    location.reload();
+    await runImportFlow(backup, 'الملف: ' + file.name);
   });
 
-  fill(root, 
+  const zipInput = h('input', { type: 'file', hidden: true });
+  zipInput.addEventListener('change', async () => {
+    const file = zipInput.files && zipInput.files[0];
+    zipInput.value = '';
+    if (!file) return;
+    let backup;
+    try { backup = await backupFromZip(new Uint8Array(await readFile(file, 'buffer'))); } catch (e) { await messageDialog(e.message || 'تعذّرت قراءة الملف.'); return; }
+    await runImportFlow(backup, 'ZIP: ' + file.name);
+  });
+
+  fill(root,
     h('h1', { class: 'title' }, 'الإعدادات'),
     licenseCard(),
     h('div', { class: 'card' },
@@ -153,9 +210,20 @@ export async function renderSettings(root) {
       } }, 'حفظ')),
     h('div', { class: 'card' },
       h('h2', { class: 'sheet-title' }, 'النسخ الاحتياطي'),
-      h('p', { class: 'dim small' }, 'بيانات التطبيق محفوظة داخل الهاتف فقط. مسح بيانات التطبيق أو حذفه يمسح كل شيء، فاحفظ نسخة بانتظام في مكان آمن (التنزيلات أو Drive أو أرسلها لنفسك).'),
+      h('p', { class: 'dim small' }, 'بيانات التطبيق محفوظة داخل الهاتف فقط. مسح بيانات التطبيق أو حذفه يمسح كل شيء، فاحفظ نسخة بانتظام.'),
       lastTxt,
-      h('button', { class: 'btn', onClick: doExport }, 'حفظ نسخة احتياطية'),
-      h('button', { class: 'btn ghost', onClick: async () => { if (await needActive()) fileInput.click(); } }, 'استيراد من نسخة'),
-      fileInput));
+      folderTxt,
+      h('button', { class: 'btn ghost', onClick: pickFolder }, 'تحديد / تغيير مجلد النسخ'),
+      h('button', { class: 'btn', onClick: doSave }, 'حفظ نسخة احتياطية'),
+      h('button', { class: 'btn ghost', onClick: doSaveElsewhere }, 'حفظ في مكان آخر (مجلد جديد)'),
+      h('p', { class: 'dim small' }, 'الحفظ في مجلد النسخ يكتب ملفًا مؤرَّخًا ويحدّث ' + MANIFEST_NAME + ' ليشير إلى آخر ملف. «حفظ في مكان آخر» يُنشئ مجلدًا جديدًا باسم التاريخ داخل ما تختاره.'),
+      h('button', { class: 'btn ok', onClick: doLatest }, '⚡ استيراد الأحدث'),
+      h('button', { class: 'btn ghost', onClick: async () => { if (await needActive()) fileInput.click(); } }, 'استيراد من ملف JSON'),
+      fileInput),
+    h('div', { class: 'card' },
+      h('h2', { class: 'sheet-title' }, 'ملف ZIP'),
+      h('p', { class: 'dim small' }, 'ZIP واحد يحوي كل بياناتك (manifest.json وbackup.json)، سهل الإرسال والحفظ.'),
+      h('button', { class: 'btn', onClick: doZip }, 'إنشاء ملف ZIP بالبيانات'),
+      h('button', { class: 'btn ghost', onClick: async () => { if (await needActive()) zipInput.click(); } }, 'استيراد من ملف ZIP'),
+      zipInput));
 }

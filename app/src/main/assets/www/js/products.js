@@ -2,12 +2,15 @@ import * as db from './db.js';
 import { normalize } from './search.js';
 import { formatMillimes, toInputString } from './money.js';
 import { requireActive } from './license.js';
+import { newUid, ensureUid } from './uid.js';
 
 export const listProducts = () => db.getAll('products');
 export const getProduct = (id) => db.get('products', id);
-export function deleteProduct(id) {
+export async function deleteProduct(id) {
   requireActive();
-  return db.del('products', id);
+  const p = await db.get('products', id);
+  await db.del('products', id);
+  if (p) await db.putTombstone('products', ensureUid('products', p));
 }
 
 export async function listBrands() {
@@ -44,6 +47,7 @@ export async function saveProduct({ id, name, barcode, brand, price, weight, des
   }
 
   const old = id ? await db.get('products', id) : null;
+  const now = Date.now();
   const obj = {
     ...(old || {}),
     name: clean,
@@ -54,7 +58,9 @@ export async function saveProduct({ id, name, barcode, brand, price, weight, des
     price,
     weight: String(weight ?? '').trim() || null,
     description: String(description ?? '').trim() || null,
-    createdAt: old ? old.createdAt : Date.now(),
+    createdAt: old ? old.createdAt : now,
+    uid: (old && old.uid) || newUid(),
+    updatedAt: now,
   };
   if (id) obj.id = id;
   return db.put('products', obj);

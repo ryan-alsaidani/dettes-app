@@ -8,7 +8,7 @@ export const licenseActive = () => licenseStatus().active;
 /** يعيد رسم الشاشة الحالية. */
 export const refreshView = () => window.dispatchEvent(new Event('hashchange'));
 
-async function copyText(text) {
+export async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* احتياط أدناه */ }
   try {
     const ta = h('textarea', { style: 'position:fixed;opacity:0' });

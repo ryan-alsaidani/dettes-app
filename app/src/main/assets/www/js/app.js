@@ -3,7 +3,8 @@ import { h, fill } from './ui/dom.js';
 import { renderHome } from './ui/home.js';
 import { renderCustomer } from './ui/customer.js';
 import { renderCart } from './ui/cart.js';
-import { liveScanStop } from './bridge.js';
+import { liveScanStop, keepAwake } from './bridge.js';
+import { renderSync, renderSend, renderReceive } from './ui/sync.js';
 import { renderPayment } from './ui/payment.js';
 import { renderNewDebt } from './ui/debt.js';
 import { renderProducts } from "./ui/product.js";
@@ -15,9 +16,10 @@ const view = document.getElementById('view');
 const nav = document.getElementById('nav');
 
 function route() {
-  if (!(location.hash || '#/').startsWith('#/cart')) liveScanStop(); // الكاميرا تعمل في السلة فقط
-  refreshLicense().catch(() => {}); // يحدّث «آخر زمن رُئي» (منع الغش بتأخير ساعة الهاتف)
   const hash = location.hash || '#/';
+  if (!hash.startsWith('#/cart') && hash !== '#/sync/receive') liveScanStop(); // الكاميرا تعمل في السلة واستلام التحديثات فقط
+  if (hash !== '#/sync/send' && hash !== '#/sync/receive') keepAwake(false);
+  refreshLicense().catch(() => {}); // يحدّث «آخر زمن رُئي» (منع الغش بتأخير ساعة الهاتف)
   const m = hash.match(/^#\/customer\/(\d+)$/);
   let active = 'home';
   nav.hidden = false;
@@ -41,7 +43,10 @@ function route() {
     nav.hidden = true;
     return renderNewDebt(view, Number(dm[1]));
   }
-  if (hash === '#/products') { active = 'products'; renderProducts(view); }
+  if (hash === '#/sync/send') { nav.hidden = true; return renderSend(view); }
+  if (hash === '#/sync/receive') { nav.hidden = true; return renderReceive(view); }
+  if (hash === '#/sync') { active = 'sync'; renderSync(view); }
+  else if (hash === '#/products') { active = 'products'; renderProducts(view); }
   else if (hash === '#/settings') { active = 'settings'; renderSettings(view); }
   else renderHome(view);
 

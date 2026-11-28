@@ -3,6 +3,7 @@ import { openDB } from './db.js';
 import { todayISO } from './dates.js';
 import { distributePaid, summarize } from './debtlogic.js';
 import { requireActive } from './license.js';
+import { newUid, ensureUid } from './uid.js';
 
 function validateLine(it) {
   if (!String(it.nameSnapshot ?? '').trim()) throw new Error('اسم البند مطلوب');
@@ -32,25 +33,26 @@ export async function createOrder({ customerId, date, note, items, paidNow = 0 }
     let paymentId = null;
     const debtIds = [];
 
-    const req = orders.add({ customerId, date, note: String(note ?? '').trim() || null, createdAt: Date.now() });
+    const now = Date.now();
+    const req = orders.add({ uid: newUid(), customerId, date, note: String(note ?? '').trim() || null, createdAt: now, updatedAt: now });
     req.onsuccess = () => {
       orderId = req.result;
       let pending = items.length;
       items.forEach((it, i) => {
         const total = it.unitPrice * it.qty;
         const r = debts.add({
-          orderId, customerId,
+          uid: newUid(), orderId, customerId,
           productId: it.productId || null,
           nameSnapshot: String(it.nameSnapshot).trim(),
           unitPrice: it.unitPrice, qty: it.qty,
           date, paid: pays[i], remaining: total - pays[i],
-          createdAt: Date.now(),
+          createdAt: now, updatedAt: now,
         });
         r.onsuccess = () => {
           debtIds[i] = r.result;
           if (--pending === 0 && applied > 0) {
             const pr = payments.add({
-              customerId, amount: applied, change, date, createdAt: Date.now(),
+              uid: newUid(), customerId, amount: applied, change, date, createdAt: now, updatedAt: now,
               allocations: debtIds.map((id, k) => ({ debtId: id, amount: pays[k] })).filter(a => a.amount > 0),
             });
             pr.onsuccess = () => { paymentId = pr.result; };
@@ -92,11 +94,12 @@ export async function markPaid(debtId) {
       const d = g.result;
       if (!d || d.remaining <= 0) return;
       const amount = d.remaining;
+      const now = Date.now();
       pays.add({
-        customerId: d.customerId, amount, date: todayISO(), createdAt: Date.now(),
+        uid: newUid(), customerId: d.customerId, amount, date: todayISO(), createdAt: now, updatedAt: now,
         allocations: [{ debtId: d.id, amount }],
       });
-      debts.put({ ...d, paid: d.paid + amount, remaining: 0 });
+      debts.put({ ...d, uid: ensureUid('debts', d), paid: d.paid + amount, remaining: 0, updatedAt: now });
     };
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
@@ -111,7 +114,7 @@ export async function updateDebt(id, { name, unitPrice, qty }) {
   validateLine({ nameSnapshot: name, unitPrice, qty });
   const total = unitPrice * qty;
   if (total < d.paid) throw new Error('الإجمالي الجديد أقل مما دُفع فعلًا (' + d.paid + ' مليم)');
-  return db.put('debts', { ...d, nameSnapshot: String(name).trim(), unitPrice, qty, remaining: total - d.paid });
+  return db.put('debts', { ...d, uid: ensureUid('debts', d), nameSnapshot: String(name).trim(), unitPrice, qty, remaining: total - d.paid, updatedAt: Date.now() });
 }
 
 export async function deleteDebt(id) {
@@ -119,6 +122,11 @@ export async function deleteDebt(id) {
   const d = await db.get('debts', id);
   if (!d) return;
   await db.del('debts', id);
+  await db.putTombstone('debts', ensureUid('debts', d));
   const rest = await db.getAllByIndex('debts', 'orderId', d.orderId);
-  if (!rest.length) await db.del('orders', d.orderId);
+  if (!rest.length) {
+    const o = await db.get('orders', d.orderId);
+    await db.del('orders', d.orderId);
+    if (o) await db.putTombstone('orders', ensureUid('orders', o));
+  }
 }

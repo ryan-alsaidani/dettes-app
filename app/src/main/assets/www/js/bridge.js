@@ -1,4 +1,5 @@
 import { requireActive } from './license.js';
+import { bytesToBase64, base64ToBytes } from './compress.js';
 
 // جسر الواجهة ↔ الغلاف الأصلي. الدوال التي تحتاج أندرويد تُرفض بخطأ 'no-bridge' خارج التطبيق.
 
@@ -103,3 +104,72 @@ export function liveScanTorch(on) {
 export function liveScanResetLast() {
   if (hasLiveScan()) window.Android.scanResetLast();
 }
+
+
+// ---------- QR، ملفات ثنائية، مجلد النسخ، إبقاء الشاشة ----------
+export const hasQr = () => !!(window.Android && typeof window.Android.qrMatrix === 'function');
+
+/** مصفوفة QR كأسطر من 0/1، أو null إن تعذّر (النص أطول من سعة الرمز). */
+export function qrMatrix(text, level = 'M') {
+  if (!hasQr()) return null;
+  const s = window.Android.qrMatrix(text, level);
+  return s ? s.split('\n') : null;
+}
+
+export function keepAwake(on) {
+  try { if (window.Android && typeof window.Android.keepAwake === 'function') window.Android.keepAwake(!!on); } catch (e) { /* اختياري */ }
+}
+
+/** يحفظ بايتات (مثل ZIP) عبر نافذة «حفظ ملف». يعيد {ok, message} كما saveFile. */
+export function saveFileBytes(name, mime, bytes) {
+  return new Promise((resolve, reject) => {
+    if (!(window.Android && typeof window.Android.saveFileB64 === 'function')) { reject(new Error('no-bridge')); return; }
+    pendingSave = resolve;
+    window.Android.saveFileB64(name, mime, bytesToBase64(bytes));
+  });
+}
+
+let pendingFolderPick = null;
+window.__onFolderPicked = (uri, name) => {
+  if (pendingFolderPick) {
+    const resolve = pendingFolderPick;
+    pendingFolderPick = null;
+    resolve(uri ? { uri, name } : null);
+  }
+};
+
+export const hasFolder = () => !!(window.Android && typeof window.Android.folderPick === 'function');
+
+/** منتقي مجلد النظام. يعيد {uri, name} أو null عند الإلغاء. */
+export function folderPick() {
+  return new Promise((resolve, reject) => {
+    if (!hasFolder()) { reject(new Error('no-bridge')); return; }
+    pendingFolderPick = resolve;
+    window.Android.folderPick();
+  });
+}
+
+const folderOps = new Map();
+let folderSeq = 0;
+window.__onFolderOp = (id, ok, result, error) => {
+  const h = folderOps.get(id);
+  if (!h) return;
+  folderOps.delete(id);
+  if (ok) h.resolve(result); else h.reject(new Error(error || 'folder'));
+};
+
+function folderOp(op, tree, subDir, name, mime, b64) {
+  return new Promise((resolve, reject) => {
+    if (!hasFolder()) { reject(new Error('no-bridge')); return; }
+    const id = 'f' + (++folderSeq);
+    folderOps.set(id, { resolve, reject });
+    window.Android.folderOp(id, op, tree, subDir || '', name || '', mime || '', b64 || '');
+  });
+}
+
+export const folderWrite = (tree, subDir, name, mime, bytes) => folderOp('write', tree, subDir, name, mime, bytesToBase64(bytes));
+export async function folderRead(tree, subDir, name) {
+  const b64 = await folderOp('read', tree, subDir, name);
+  return b64 === null ? null : base64ToBytes(b64);
+}
+export async function folderList(tree, subDir = '') { return JSON.parse(await folderOp('list', tree, subDir, '')); }

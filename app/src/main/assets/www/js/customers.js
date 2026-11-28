@@ -1,19 +1,23 @@
 import * as db from './db.js';
 import { normalize } from './search.js';
 import { requireActive } from './license.js';
+import { newUid, ensureUid } from './uid.js';
 
 export async function saveCustomer({ id, name, phone, note }) {
   requireActive();
   const clean = String(name ?? '').trim();
   if (!clean) throw new Error('الاسم مطلوب');
   const old = id ? await db.get('customers', id) : null;
+  const now = Date.now();
   const obj = {
     ...(old || {}),
     name: clean,
     nameNorm: normalize(clean),
     phone: String(phone ?? '').trim() || null,
     note: String(note ?? '').trim() || null,
-    createdAt: old ? old.createdAt : Date.now(),
+    createdAt: old ? old.createdAt : now,
+    uid: (old && old.uid) || newUid(),
+    updatedAt: now,
   };
   if (id) obj.id = id;
   return db.put('customers', obj);
@@ -60,7 +64,15 @@ export async function customerDebtCount(id) {
 
 export async function deleteCustomer(id) {
   requireActive();
+  const c = await db.get('customers', id);
   await db.del('customers', id);
-  for (const p of await db.getAllByIndex('payments', 'customerId', id)) await db.del('payments', p.id);
-  for (const o of await db.getAllByIndex('orders', 'customerId', id)) await db.del('orders', o.id);
+  if (c) await db.putTombstone('customers', ensureUid('customers', c));
+  for (const p of await db.getAllByIndex('payments', 'customerId', id)) {
+    await db.del('payments', p.id);
+    await db.putTombstone('payments', ensureUid('payments', p));
+  }
+  for (const o of await db.getAllByIndex('orders', 'customerId', id)) {
+    await db.del('orders', o.id);
+    await db.putTombstone('orders', ensureUid('orders', o));
+  }
 }

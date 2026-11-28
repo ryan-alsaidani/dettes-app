@@ -3,6 +3,7 @@ import { listCustomersWithTotals, saveCustomer } from '../customers.js';
 import { listAllDebts } from '../debts.js';
 import { summarize, rangeBounds, filterByDateRange, addMonthsISO } from '../debtlogic.js';
 import { todayISO, formatDate } from '../dates.js';
+import { getAlerts } from '../devstate.js';
 import { matches } from '../search.js';
 import { formatMillimes } from '../money.js';
 import { getSetting, setSetting } from '../settings.js';
@@ -12,6 +13,7 @@ import { needActive, licenseCard } from './licensecard.js';
 export async function renderHome(root) {
   let all = await listCustomersWithTotals();
   const allDebts = await listAllDebts();
+  const alertCount = getAlerts().length;
   const lastBackup = await getSetting('lastBackupAt', 0);
   const snoozeUntil = await getSetting('backupSnoozeUntil', 0);
   const staleDays = daysSince(lastBackup);
@@ -123,6 +125,9 @@ export async function renderHome(root) {
     h('h1', { class: 'title' }, 'الزبائن'),
     licenseCard(),
     reminder,
+    alertCount ? h('div', { class: 'card alertcard' },
+      h('div', { class: 'item-name' }, 'لديك ' + alertCount + (alertCount === 1 ? ' تنبيه' : ' تنبيهات') + ' من التحديثات'),
+      h('button', { class: 'btn mini', onClick: () => { location.hash = '#/sync'; } }, 'عرض التنبيهات')) : null,
     h('button', { class: 'btn cartbtn', onClick: () => { location.hash = '#/cart'; } }, '🛒 سلة جديدة (مسح المنتجات)'),
     statsCard,
     search, addBtn, count, list);

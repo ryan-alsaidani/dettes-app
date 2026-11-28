@@ -10,8 +10,8 @@ android {
         applicationId 'com.ryan.dettes'
         minSdk 24
         targetSdk 34
-        versionCode 10
-        versionName '0.9.1'
+        versionCode 11
+        versionName '0.10.0'
     }
 
     // مفتاح تصحيح ثابت داخل المستودع (ليس سرًّا) حتى تتطابق توقيعات كل البنايات
